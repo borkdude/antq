@@ -1,7 +1,4 @@
-{:aliases {:uberjar "target/antq-standalone.jar"
-           :jar "target/antq.jar"}
-
- :tasks
+{:tasks
 
  {:repl [shell "iced repl -A:dev"]
 
