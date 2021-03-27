@@ -1,0 +1,72 @@
+{:aliases {:uberjar "target/antq-standalone.jar"
+           :jar "target/antq.jar"}
+
+ :tasks
+
+ {:repl [shell "iced repl -A:dev"]
+
+  :outdated [babashka clojure -M:outdated:nop --update]
+
+  ;; TODO: we need a clojure task!
+  :test [do
+         [babashka clojure -M:outdated:nop:1.8 --exclude=clojure/brew-install]
+         [babashka clojure -M:dev:1.9:test]
+         [babashka clojure -M:dev:test]]
+
+  :lint [do
+         [shell "echo cljstyle"] ;; I don't have cljstyle so this is a replacement
+         [shell clj-kondo --lint "src:test"]]
+
+  :pom [babashka clojure -Spom]
+
+  :clean [shell "rm -rf .cpcache target"]
+
+  :-uberjar [babashka clojure -X:depstar uberjar
+             :aot true
+             :main-class antq.core
+             :aliases [:nop]
+             :jar "target/antq-standalone.jar"]
+
+  :uberjar {:task [do
+                   [:pom]
+                   [:clean]
+                   [:-uberjar]]}
+
+  :jar [do
+        [:pom]
+        [:clean]
+        [babashka clojure -X:depstar jar :jar "target/antq.jar"]]
+
+  :install [do
+            [shell "echo pre-clean"]
+            [:clean]
+            [shell "echo pre-jar"]
+            [:jar]
+            [shell "echo pre-clojure"]
+            [babashka clojure -X:deploy :installer :local :artifact "target/antq.jar"]]
+
+  :deploy {:task [do
+                  [babashka -e (when-not (System/getenv "CLOJARS_USERNAME")
+                                 (System/exit 1))]
+                  [:clean]
+                  [:jar]
+                  [babashka clojure -X:deploy :installer :remote :artifact "target/antq.jar"]]}
+
+  :docker [shell "docker build -t uochan/antq ."]
+
+  :docker-test [babashka -e
+                (do (def pwd (str (babashka.fs/absolutize "")))
+                    (-> (babashka.process/process ["docker" "run" "--rm" "-v"
+                                                   (str pwd ":/src") "-w" "/src" "uochan/antq:latest"]
+                                                  {:inherit true})
+                        (babashka.process/check))) ]
+
+  :coverage [babashka clojure -M:coverage:dev:nop --src-ns-path=src --test-ns-path=test --codecov]
+
+  ;; TODO: implement ref
+  ;; TODO: implement clojure task
+  ;; TODO: implement product?
+  ;; TODO: implement depends?
+  
+  },
+ }
