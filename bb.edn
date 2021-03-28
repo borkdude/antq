@@ -1,4 +1,5 @@
-{:tasks
+{:paths ["script"]
+ :tasks
 
  {:repl [shell "iced repl -A:dev"]
 
