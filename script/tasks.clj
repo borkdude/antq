@@ -1,4 +1,5 @@
 (ns tasks
+  "This namespace contains tasks!"
   (:require [babashka.deps :as deps]
             [babashka.fs :as fs]
             [babashka.process :as p]))
