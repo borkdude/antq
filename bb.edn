@@ -12,13 +12,12 @@
                   (shell "clj-kondo --lint src:test"))
          pom (clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
-         uberjar (do (run 'pom)
-                     (run 'clean)
-                     (clojure "-X:depstar uberjar
-           :aot true
-           :main-class antq.core
-           :aliases [:nop]
-           :jar" standalone-jar-file))
+         uberjar {:depends [clean pom]
+                  :run (clojure "-X:depstar uberjar
+                                 :aot true
+                                 :main-class antq.core
+                                 :aliases [:nop]
+                                 :jar" standalone-jar-file)}
          jar (do (run 'pom)
                  (run 'clean)
                  (clojure "-X:depstar jar :jar" jar-file))
