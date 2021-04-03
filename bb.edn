@@ -1,1 +1,38 @@
-{:paths ["script"]}
+{:paths ["script"]
+ :tasks {tasks/init (do
+                      (def standalone-jar-file "target/antq-standalone.jar")
+                      (def jar-file "target/antq.jar"))
+         repl (shell "iced repl -A:dev")
+         outdated (clojure "-M:outdated:nop --update")
+         tests (do
+                 (clojure "-M:outdated:nop:1.8 --exclude=clojure/brew-install")
+                 (clojure "clojure -M:dev:1.9:test")
+                 (clojure "clojure -M:dev:test"))
+         lint (do (shell "echo cljstyle") ;; I don't have clj-style
+                  (shell "clj-kondo --lint src:test"))
+         pom (clojure "-Spom")
+         clean (shell "rm -rf .cpcache target")
+         uberjar (do (run 'pom)
+                     (run 'clean)
+                     (clojure "-X:depstar uberjar
+           :aot true
+           :main-class antq.core
+           :aliases [:nop]
+           :jar" standalone-jar-file))
+         jar (do (run 'pom)
+                 (run 'clean)
+                 (clojure "-X:depstar jar :jar" jar-file))
+         install (do (run 'clean)
+                     (run 'jar)
+                     (clojure "-X:deploy :installer :local :artifact" jar-file))
+         deploy (if-not (System/getenv "CLOJARS_USERNAME")
+                  (binding [*out* *err*]
+                    (println "Not deploying because CLOJARS_USERNAME isn't set."))
+                  (do
+                    (run 'clean)
+                    (run 'jar)
+                    (clojure "-X:deploy :installer :remote :artifact" jar-file)))
+         docker (shell "docker run --rm -v"
+                       (str (System/getProperty "user.dir") ":/src")
+                       "-w" "/src" "uochan/antq:latest")
+         coverage (clojure "-M:coverage:dev:nop --src-ns-path=src --test-ns-path=test --codecov")}}
