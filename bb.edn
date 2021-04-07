@@ -13,7 +13,7 @@
          pom (clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
          uberjar {:depends [clean pom]
-                  :run (clojure "-X:depstar uberjar
+                  :task (clojure "-X:depstar uberjar
                                  :aot true
                                  :main-class antq.core
                                  :aliases [:nop]
