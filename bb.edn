@@ -1,7 +1,7 @@
 {:paths ["script"]
- :tasks {tasks/init (do
-                      (def standalone-jar-file "target/antq-standalone.jar")
-                      (def jar-file "target/antq.jar"))
+ :tasks {:init (do
+                 (def standalone-jar-file "target/antq-standalone.jar")
+                 (def jar-file "target/antq.jar"))
          repl (shell "iced repl -A:dev")
          outdated (clojure "-M:outdated:nop --update")
          tests (do
@@ -18,19 +18,13 @@
                                  :main-class antq.core
                                  :aliases [:nop]
                                  :jar" standalone-jar-file)}
-         jar (do (run 'pom)
-                 (run 'clean)
-                 (clojure "-X:depstar jar :jar" jar-file))
-         install (do (run 'clean)
-                     (run 'jar)
-                     (clojure "-X:deploy :installer :local :artifact" jar-file))
-         deploy (if-not (System/getenv "CLOJARS_USERNAME")
-                  (binding [*out* *err*]
-                    (println "Not deploying because CLOJARS_USERNAME isn't set."))
-                  (do
-                    (run 'clean)
-                    (run 'jar)
-                    (clojure "-X:deploy :installer :remote :artifact" jar-file)))
+         jar {:depends [pom clean]
+              :task (clojure "-X:depstar jar :jar" jar-file)}
+         install {:depends [clean jar]
+                  :task (clojure "-X:deploy :installer :local :artifact" jar-file)}
+         deploy {:when (System/getenv "CLOJARS_USERNAME")
+                 :depends [clean jar]
+                 :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
          docker (shell "docker run --rm -v"
                        (str (System/getProperty "user.dir") ":/src")
                        "-w" "/src" "uochan/antq:latest")
