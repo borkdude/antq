@@ -1,7 +1,11 @@
 {:paths ["script"]
  :tasks {:init (do
+                 (ns my.tasks
+                   (:require [babashka.tasks :refer [clojure shell]]))
+
                  (def standalone-jar-file "target/antq-standalone.jar")
                  (def jar-file "target/antq.jar"))
+
          repl (shell "iced repl -A:dev")
          outdated (clojure "-M:outdated:nop --update")
          tests (do
