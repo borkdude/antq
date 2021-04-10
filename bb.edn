@@ -10,7 +10,7 @@
                  (clojure "clojure -M:dev:test"))
          lint (do (shell "echo cljstyle") ;; I don't have clj-style
                   (shell "clj-kondo --lint src:test"))
-         pom (clojure "-Spom")
+         pom (tasks/clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
          uberjar {:depends [clean pom]
                   :task (clojure "-X:depstar uberjar
@@ -22,9 +22,10 @@
               :task (clojure "-X:depstar jar :jar" jar-file)}
          install {:depends [clean jar]
                   :task (clojure "-X:deploy :installer :local :artifact" jar-file)}
-         deploy {:when (System/getenv "CLOJARS_USERNAME")
-                 :depends [clean jar]
-                 :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
+         -deploy {:depends [clean jar]
+                  :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
+         deploy (when (System/getenv "CLOJARS_USERNAME")
+                  (shell "bb -deploy"))
          docker (shell "docker run --rm -v"
                        (str (System/getProperty "user.dir") ":/src")
                        "-w" "/src" "uochan/antq:latest")
