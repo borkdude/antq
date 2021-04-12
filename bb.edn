@@ -1,7 +1,6 @@
 {:paths ["script"]
- :tasks {-standalone-jar-file "target/antq-standalone.jar"
-         -jar-file "target/antq.jar"
-
+ :tasks {:init (do (def standalone-jar-file "target/antq-standalone.jar")
+                   (def jar-file "target/antq.jar"))
          repl (shell "iced repl -A:dev")
          outdated (clojure "-M:outdated:nop --update")
          tests (do
@@ -12,18 +11,18 @@
                   (shell "clj-kondo --lint src:test"))
          pom (clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
-         uberjar {:depends [clean pom -standalone-jar-file]
+         uberjar {:depends [clean pom]
                   :task (clojure "-X:depstar uberjar
                                  :aot true
                                  :main-class antq.core
                                  :aliases [:nop]
-                                 :jar" -standalone-jar-file)}
-         jar {:depends [pom clean -jar-file]
-              :task (clojure "-X:depstar jar :jar" -jar-file)}
-         install {:depends [clean jar -jar-file]
-                  :task (clojure "-X:deploy :installer :local :artifact" -jar-file)}
-         -deploy {:depends [clean jar -jar-file]
-                  :task (clojure "-X:deploy :installer :remote :artifact" -jar-file)}
+                                 :jar" standalone-jar-file)}
+         jar {:depends [pom clean]
+              :task (clojure "-X:depstar jar :jar" jar-file)}
+         install {:depends [clean jar jar-file]
+                  :task (clojure "-X:deploy :installer :local :artifact" jar-file)}
+         -deploy {:depends [clean jar jar-file]
+                  :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
          deploy (when (System/getenv "CLOJARS_USERNAME")
                   (shell "bb -deploy"))
          docker (shell "docker run --rm -v"
