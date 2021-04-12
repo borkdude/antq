@@ -1,10 +1,6 @@
 {:paths ["script"]
- :tasks {:init (do
-                 (ns my.tasks
-                   (:require [babashka.tasks :refer [clojure shell]]))
-
-                 (def standalone-jar-file "target/antq-standalone.jar")
-                 (def jar-file "target/antq.jar"))
+ :tasks {-standalone-jar-file "target/antq-standalone.jar"
+         -jar-file "target/antq.jar"
 
          repl (shell "iced repl -A:dev")
          outdated (clojure "-M:outdated:nop --update")
@@ -14,20 +10,20 @@
                  (clojure "clojure -M:dev:test"))
          lint (do (shell "echo cljstyle") ;; I don't have clj-style
                   (shell "clj-kondo --lint src:test"))
-         pom (tasks/clojure "-Spom")
+         pom (clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
-         uberjar {:depends [clean pom]
+         uberjar {:depends [clean pom -standalone-jar-file]
                   :task (clojure "-X:depstar uberjar
                                  :aot true
                                  :main-class antq.core
                                  :aliases [:nop]
-                                 :jar" standalone-jar-file)}
-         jar {:depends [pom clean]
-              :task (clojure "-X:depstar jar :jar" jar-file)}
-         install {:depends [clean jar]
-                  :task (clojure "-X:deploy :installer :local :artifact" jar-file)}
-         -deploy {:depends [clean jar]
-                  :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
+                                 :jar" -standalone-jar-file)}
+         jar {:depends [pom clean -jar-file]
+              :task (clojure "-X:depstar jar :jar" -jar-file)}
+         install {:depends [clean jar -jar-file]
+                  :task (clojure "-X:deploy :installer :local :artifact" -jar-file)}
+         -deploy {:depends [clean jar -jar-file]
+                  :task (clojure "-X:deploy :installer :remote :artifact" -jar-file)}
          deploy (when (System/getenv "CLOJARS_USERNAME")
                   (shell "bb -deploy"))
          docker (shell "docker run --rm -v"
