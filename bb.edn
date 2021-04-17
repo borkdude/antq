@@ -11,7 +11,7 @@
                   (shell "clj-kondo --lint src:test"))
          pom (clojure "-Spom")
          clean (shell "rm -rf .cpcache target")
-         uberjar {:depends [clean pom]
+         uberjar {:depends [pom]
                   :task (clojure "-X:depstar uberjar
                                  :aot true
                                  :main-class antq.core
@@ -19,9 +19,9 @@
                                  :jar" standalone-jar-file)}
          jar {:depends [pom clean]
               :task (clojure "-X:depstar jar :jar" jar-file)}
-         install {:depends [clean jar jar-file]
+         install {:depends [jar]
                   :task (clojure "-X:deploy :installer :local :artifact" jar-file)}
-         -deploy {:depends [clean jar jar-file]
+         -deploy {:depends [jar]
                   :task (clojure "-X:deploy :installer :remote :artifact" jar-file)}
          deploy (when (System/getenv "CLOJARS_USERNAME")
                   (shell "bb -deploy"))
