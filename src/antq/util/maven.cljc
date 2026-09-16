@@ -1,8 +1,6 @@
 (ns ^:no-doc antq.util.maven
   (:require
-   [antq.constant :as const]
    [antq.log :as log]
-   [antq.util.async :as u.async]
    [antq.util.env :as u.env]
    [antq.util.leiningen :as u.lein]
    [antq.util.xml :as u.xml]
@@ -10,18 +8,14 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.tools.deps.util.maven :as deps.util.maven]
-   #?@(:bb [[babashka.http-client :as http]]
+   #?@(:bb []
        :clj [[clojure.tools.deps.util.session :as deps.util.session]]))
   (:import
    (java.net
     Authenticator
     PasswordAuthentication)
    #?@(:bb []
-       :clj [(org.apache.maven.model
-              Model
-              Scm)
-             org.apache.maven.model.io.xpp3.MavenXpp3Reader
-             (org.apache.maven.settings
+       :clj [(org.apache.maven.settings
               Server
               Settings)
              (org.eclipse.aether
@@ -135,29 +129,6 @@
         :username (.getUsername prxy)
         :password (.getPassword prxy)})))
 
-#?(:bb
-   (def http-client
-     "An http client that routes through the proxy from the Maven settings."
-     (delay
-       (let [{:keys [host port username password]} (active-proxy)
-             credentials? (and host username password)]
-         (when credentials?
-           ;; the JDK bans Basic authentication for CONNECT tunnels by default
-           (System/setProperty "jdk.http.auth.tunneling.disabledSchemes" ""))
-         (http/client (cond-> {:follow-redirects :normal}
-                        host (assoc :proxy {:host host :port port})
-                        credentials? (assoc :authenticator {:user username :pass password})))))))
-
-#?(:bb
-   (defn- http-get-string
-     "Returns the body of a GET on url, and throws an IOException for any
-  status other than 200."
-     [^String url]
-     (let [{:keys [status body]} (http/get url {:client @http-client :throw false})]
-       (if (= 200 status)
-         body
-         (throw (java.io.IOException. (str "HTTP " status " for " url)))))))
-
 #?(:bb nil
    :clj
    (def ^TransferListener custom-transfer-listener
@@ -193,70 +164,15 @@
         :artifact artifact
         :remote-repos remote-repos})))
 
-#?(:bb
-   (defn- parse-pom-model
-     "Returns the url and scm of the POM in s as a map. Parent POMs are not
-  read, so a project that inherits its url or scm reports neither."
-     [^String s]
-     (try
-       (let [root (first (filter map? (xml-seq (xml/parse-str s))))
-             content (:content root)
-             scm (first (u.xml/get-tags :scm content))]
-         {:url (u.xml/get-value :url content)
-          :scm (when scm
-                 {:url (u.xml/get-value :url (:content scm))})})
-       ;; babashka cannot name javax.xml.stream.XMLStreamException in a catch clause
-       (catch Exception e
-         (throw (java.io.IOException. (str "Failed to parse pom: " (ex-message e))))))))
-
-(defn- read-pom*
-  [^String url]
-  #?(:bb (parse-pom-model (http-get-string url))
-     :clj (with-open [reader (io/reader url)]
-            (.read (MavenXpp3Reader.) reader))))
-
-(def ^:private read-pom*-with-timeout
-  (u.async/fn-with-timeout
-   read-pom*
-   const/pom-timeout-msec))
-
 (defn read-pom
-  [^String url]
-  (when-not (str/includes? url "s3://") ; can't do diff's on s3:// repos, https://github.com/liquidz/antq/issues/133.
-    (loop [i 0]
-      (when (< i const/retry-limit)
-        (or (try
-              (read-pom*-with-timeout url)
-              (catch java.net.ConnectException e
-                (if (= "Operation timed out" (.getMessage e))
-                  (log/warning (str "Fetching pom from " url " failed because it timed out, retrying"))
-                  (throw e)))
-              (catch java.io.IOException e
-                (log/warning (str "Fetching pom from " url " failed because of the following error: " (.getMessage e))))
-              #?@(:bb []
-                  :clj
-                  ;; e.g. This exception is thrown by reading the following pom.xml
-                  ;;      https://repo1.maven.org/maven2/jakarta/mail/jakarta.mail-api/2.0.1/jakarta.mail-api-2.0.1.pom
-                  [(catch org.codehaus.plexus.util.xml.pull.XmlPullParserException e
-                     (log/warning (str "Fetching pom from " url " failed because of the following error: " (.getMessage e))))]))
-            (recur (inc i)))))))
-
-(defn get-model-url
-  ^String
-  [model]
-  #?(:bb (:url model)
-     :clj (.getUrl ^Model model)))
-
-(defn get-model-scm
-  [model]
-  #?(:bb (:scm model)
-     :clj (.getScm ^Model model)))
-
-(defn get-scm-url
-  ^String
-  [scm]
-  #?(:bb (:url scm)
-     :clj (.getUrl ^Scm scm)))
+  "Returns the url and scm url of a POM file as a map. Parent POMs are not
+  read, so a project that inherits its url or scm reports neither."
+  [^java.io.File file]
+  (let [root (first (filter map? (xml-seq (xml/parse-str (slurp file)))))
+        content (:content root)
+        scm (first (u.xml/get-tags :scm content))]
+    {:url (u.xml/get-value :url content)
+     :scm-url (u.xml/get-value :url (:content scm))}))
 
 (defn- get-local-versions*
   [name]

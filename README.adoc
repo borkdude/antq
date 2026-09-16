@@ -185,10 +185,7 @@ bb -Sdeps '{:deps {com.github.liquidz/antq {:mvn/version "RELEASE"}}}' \
   -m antq.core
 ----
 
-Two differences from the JVM:
-
-* SNAPSHOT versions of Maven artifacts are not reported.
-* Changelog and diff URLs are found only for artifacts in repositories that serve their POM without authentication.
+One difference from the JVM: SNAPSHOT versions of Maven artifacts are not reported.
 
 === Timeouts
 
