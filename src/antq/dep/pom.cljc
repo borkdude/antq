@@ -11,7 +11,8 @@
    [clojure.tools.deps.extensions.pom :as ext.pom])
   (:import
    java.io.File
-   org.apache.maven.model.Repository))
+   #?@(:bb []
+       :clj [org.apache.maven.model.Repository])))
 
 (defn extract-repos-from-xml
   [xml]
@@ -37,14 +38,28 @@
                                     :version version
                                     :repositories repos}))))))
 
+(defn- read-model
+  "Returns the effective model of the POM in file. Returns Maven's `Model`
+  on the JVM, and a map under babashka."
+  [^File file config]
+  #?(:bb (ext.pom/read-model (slurp file) config nil)
+     :clj (ext.pom/read-model-file file config)))
+
+(defn- model-repositories
+  [model]
+  #?(:bb (reduce (fn [accm {:keys [id url]}]
+                   (assoc accm id {:url url}))
+                 {} (:repositories model))
+     :clj (reduce (fn [accm ^Repository repo]
+                    (assoc accm (.getId repo) {:url (.getUrl repo)}))
+                  {} (.getRepositories ^org.apache.maven.model.Model model))))
+
 (defn extract-deps
   [^String file-path ^File file]
   (try
     (let [config {:mvn/repos u.mvn/default-repos}
-          model (ext.pom/read-model-file file config)
-          repos (reduce (fn [accm ^Repository repo]
-                          (assoc accm (.getId repo) {:url (.getUrl repo)}))
-                        {} (.getRepositories model))]
+          model (read-model file config)
+          repos (model-repositories model)]
       (for [[dep-name attr] (ext.pom/model-deps model)]
         (r/map->Dependency {:project :pom
                             :type :java

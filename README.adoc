@@ -174,6 +174,22 @@ Or if you prefer, you can use our ready-made GitHub action:
 Antq experimentally supports https://gradle.org[Gradle].
 See link:./doc/gradle.adoc[our Gradle docs] for details.
 
+[[usage-babashka]]
+=== babashka
+
+Antq runs on https://babashka.org[babashka] 1.13.223 or later.
+
+[source,sh]
+----
+bb -Sdeps '{:deps {com.github.liquidz/antq {:mvn/version "RELEASE"}}}' \
+  -m antq.core
+----
+
+Two differences from the JVM:
+
+* SNAPSHOT versions of Maven artifacts are not reported.
+* Changelog and diff URLs are found only for artifacts in repositories that serve their POM without authentication.
+
 === Timeouts
 
 Antq has timeouts for acquiring various information.

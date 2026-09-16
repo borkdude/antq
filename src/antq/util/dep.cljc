@@ -7,15 +7,16 @@
    [clojure.string :as str])
   (:import
    java.io.File
-   (org.eclipse.aether
-    DefaultRepositorySystemSession
-    RepositorySystem)
-   (org.eclipse.aether.artifact
-    Artifact)
-   (org.eclipse.aether.repository
-    RemoteRepository)
-   (org.eclipse.aether.resolution
-    ArtifactRequest)))
+   #?@(:bb [java.net.HttpURLConnection]
+       :clj [(org.eclipse.aether
+              DefaultRepositorySystemSession
+              RepositorySystem)
+             (org.eclipse.aether.artifact
+              Artifact)
+             (org.eclipse.aether.repository
+              RemoteRepository)
+             (org.eclipse.aether.resolution
+              ArtifactRequest)])))
 
 (defn compare-deps
   [x y]
@@ -69,39 +70,65 @@
       (catch Exception _
         (.getCanonicalPath file)))))
 
+(defn- pom-path
+  [{:keys [name version]}]
+  (let [[group-id artifact-id] (str/split name #"/" 2)]
+    (format "%s/%s/%s/%s-%s.pom"
+            (str/replace group-id "." "/")
+            artifact-id
+            version
+            artifact-id
+            version)))
+
+#?(:bb
+   (defn- serves-pom?
+     "Returns true when repo-url serves the POM of dep. Repositories that
+  need authentication return false."
+     [repo-url dep]
+     (try
+       (let [url (str (u.url/ensure-tail-slash repo-url) (pom-path dep))
+             conn ^HttpURLConnection (.openConnection (io/as-url url))]
+         (try
+           (.setRequestMethod conn "HEAD")
+           (= 200 (.getResponseCode conn))
+           (finally
+             (.disconnect conn))))
+       (catch Exception _ false))))
+
 (defn- get-repository-url*
   [{:keys [name version] :as dep}]
-  (try
-    (let [opts (repository-opts dep)
-          {:keys [^RepositorySystem system
-                  ^DefaultRepositorySystemSession  session
-                  ^Artifact artifact
-                  remote-repos]} (u.mvn/repository-system name version opts)
-          req (doto (ArtifactRequest.)
-                (.setArtifact artifact)
-                (.setRepositories remote-repos))
-          repo (some-> (.resolveArtifact system session req)
-                       (.getRepository))]
+  #?(:bb
+     (let [opts (repository-opts dep)]
+       (some (fn [[_id {:keys [url]}]]
+               (when (and url
+                          (not (str/starts-with? url "s3://"))
+                          (serves-pom? url dep))
+                 url))
+             (:repositories opts)))
+
+     :clj
+     (try
+       (let [opts (repository-opts dep)
+             {:keys [^RepositorySystem system
+                     ^DefaultRepositorySystemSession  session
+                     ^Artifact artifact
+                     remote-repos]} (u.mvn/repository-system name version opts)
+             req (doto (ArtifactRequest.)
+                   (.setArtifact artifact)
+                   (.setRepositories remote-repos))
+             repo (some-> (.resolveArtifact system session req)
+                          (.getRepository))]
       ;; repo may be org.eclipse.aether.repository.LocalRepository
-      (when (instance? RemoteRepository repo)
-        (.getUrl ^RemoteRepository repo)))
+         (when (instance? RemoteRepository repo)
+           (.getUrl ^RemoteRepository repo)))
     ;; Skip showing diff URL when fetching repository URL is failed
-    (catch Exception _ nil)))
+       (catch Exception _ nil))))
 (def get-repository-url (u.fn/memoize-by get-repository-url* :name))
 
 (defn- dep->pom-url
   [dep]
-  (let [{:keys [version]} dep
-        [group-id artifact-id] (str/split (:name dep) #"/" 2)
-        repo-url (get-repository-url dep)]
-    (when repo-url
-      (format "%s%s/%s/%s/%s-%s.pom"
-              (u.url/ensure-tail-slash repo-url)
-              (str/replace group-id "." "/")
-              artifact-id
-              version
-              artifact-id
-              version))))
+  (when-let [repo-url (get-repository-url dep)]
+    (str (u.url/ensure-tail-slash repo-url) (pom-path dep))))
 
 (defn- get-scm-url*
   [dep]

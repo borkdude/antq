@@ -1,3 +1,5 @@
 {:linters {:unresolved-namespace {:exclude [z]}}
  :output {:exclude-files ["test/resources/dep"]}
+ ;; lint .cljc files as Clojure
+ :cljc {:features [:clj]}
  :lint-as {antq.test-helper/with-temp-file clojure.core/let}}

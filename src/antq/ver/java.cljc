@@ -7,28 +7,40 @@
    [antq.util.maven :as u.mvn]
    [antq.ver :as ver]
    [clojure.set :as set]
-   [version-clj.core :as version])
+   [version-clj.core :as version]
+   #?@(:bb [[clojure.tools.deps.extensions :as deps.ext]]
+       :clj []))
   (:import
    clojure.lang.ExceptionInfo
-   (org.eclipse.aether
-    DefaultRepositorySystemSession
-    RepositorySystem)
-   (org.eclipse.aether.artifact
-    Artifact)
-   (org.eclipse.aether.resolution
-    VersionRangeRequest)))
+   #?@(:bb []
+       :clj [(org.eclipse.aether
+              DefaultRepositorySystemSession
+              RepositorySystem)
+             (org.eclipse.aether.artifact
+              Artifact)
+             (org.eclipse.aether.resolution
+              VersionRangeRequest)])))
 
 (defn- get-versions
+  "Returns the versions of the artifact in the repositories in opts. Under
+  babashka the versions come from tools.deps, which omits SNAPSHOTs."
   [name opts]
-  (let [{:keys [^RepositorySystem system
-                ^DefaultRepositorySystemSession  session
-                ^Artifact artifact
-                remote-repos]} (u.mvn/repository-system name "[0,)" opts)
-        req (doto (VersionRangeRequest.)
-              (.setArtifact artifact)
-              (.setRepositories remote-repos))]
-    (->> (.resolveVersionRange system session req)
-         (.getVersions))))
+  #?(:bb
+     (let [lib (cond-> name (string? name) symbol)]
+       (->> (deps.ext/find-versions lib {:mvn/version "RELEASE"} :mvn
+                                    {:mvn/repos (:repositories opts)})
+            (map :mvn/version)))
+
+     :clj
+     (let [{:keys [^RepositorySystem system
+                   ^DefaultRepositorySystemSession  session
+                   ^Artifact artifact
+                   remote-repos]} (u.mvn/repository-system name "[0,)" opts)
+           req (doto (VersionRangeRequest.)
+                 (.setArtifact artifact)
+                 (.setRepositories remote-repos))]
+       (->> (.resolveVersionRange system session req)
+            (.getVersions)))))
 
 (def ^:private get-versions-with-timeout
   (u.async/fn-with-timeout

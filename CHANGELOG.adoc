@@ -1,6 +1,8 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of http://keepachangelog.com/[keepachangelog.com].
 
 == Unreleased (dev)
+=== Added
+* Run on babashka 1.13.223 or later. SNAPSHOT versions of Maven artifacts are not reported, and changelog and diff URLs are found only for artifacts in repositories that serve their POM without authentication.
 
 == 2.11.1276 (2025-03-15)
 // {{{
