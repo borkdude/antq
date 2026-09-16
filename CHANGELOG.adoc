@@ -2,7 +2,7 @@ All notable changes to this project will be documented in this file. This change
 
 == Unreleased (dev)
 === Added
-* Run on babashka 1.13.223 or later. SNAPSHOT versions of Maven artifacts are not reported.
+* Run on babashka 1.13.224 or later. SNAPSHOT versions of Maven artifacts are not reported.
 
 === Changed
 * Read an artifact's POM from the local Maven repository through tools.deps instead of resolving its repository and fetching the POM over HTTP. Artifacts whose repository needs authentication now get a changelog URL too.
