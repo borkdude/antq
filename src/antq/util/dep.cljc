@@ -4,10 +4,12 @@
    [antq.util.maven :as u.mvn]
    [antq.util.url :as u.url]
    [clojure.java.io :as io]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   #?@(:bb [[babashka.http-client :as http]]
+       :clj []))
   (:import
    java.io.File
-   #?@(:bb [java.net.HttpURLConnection]
+   #?@(:bb []
        :clj [(org.eclipse.aether
               DefaultRepositorySystemSession
               RepositorySystem)
@@ -86,13 +88,9 @@
   need authentication return false."
      [repo-url dep]
      (try
-       (let [url (str (u.url/ensure-tail-slash repo-url) (pom-path dep))
-             conn ^HttpURLConnection (.openConnection (io/as-url url))]
-         (try
-           (.setRequestMethod conn "HEAD")
-           (= 200 (.getResponseCode conn))
-           (finally
-             (.disconnect conn))))
+       (= 200 (:status (http/head (str (u.url/ensure-tail-slash repo-url) (pom-path dep))
+                                  {:client @u.mvn/http-client
+                                   :throw false})))
        (catch Exception _ false))))
 
 (defn- get-repository-url*

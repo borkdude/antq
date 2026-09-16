@@ -10,7 +10,7 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.tools.deps.util.maven :as deps.util.maven]
-   #?@(:bb []
+   #?@(:bb [[babashka.http-client :as http]]
        :clj [[clojure.tools.deps.util.session :as deps.util.session]]))
   (:import
    (java.net
@@ -118,6 +118,46 @@
                          (new-repository-server {:id id :username username :password password})))))
        settings)))
 
+(defn- active-proxy
+  "Returns the proxy to route HTTP through as a map, or nil for a direct
+  connection."
+  []
+  #?(:bb
+     (->> (:proxies (get-maven-settings {}))
+          (filter :active)
+          (first))
+
+     :clj
+     (when-let [prxy (some-> ^Settings (get-maven-settings {})
+                             (.getActiveProxy))]
+       {:host (.getHost prxy)
+        :port (.getPort prxy)
+        :username (.getUsername prxy)
+        :password (.getPassword prxy)})))
+
+#?(:bb
+   (def http-client
+     "An http client that routes through the proxy from the Maven settings."
+     (delay
+       (let [{:keys [host port username password]} (active-proxy)
+             credentials? (and host username password)]
+         (when credentials?
+           ;; the JDK bans Basic authentication for CONNECT tunnels by default
+           (System/setProperty "jdk.http.auth.tunneling.disabledSchemes" ""))
+         (http/client (cond-> {:follow-redirects :normal}
+                        host (assoc :proxy {:host host :port port})
+                        credentials? (assoc :authenticator {:user username :pass password})))))))
+
+#?(:bb
+   (defn- http-get-string
+     "Returns the body of a GET on url, and throws an IOException for any
+  status other than 200."
+     [^String url]
+     (let [{:keys [status body]} (http/get url {:client @http-client :throw false})]
+       (if (= 200 status)
+         body
+         (throw (java.io.IOException. (str "HTTP " status " for " url)))))))
+
 #?(:bb nil
    :clj
    (def ^TransferListener custom-transfer-listener
@@ -171,7 +211,7 @@
 
 (defn- read-pom*
   [^String url]
-  #?(:bb (parse-pom-model (slurp url))
+  #?(:bb (parse-pom-model (http-get-string url))
      :clj (with-open [reader (io/reader url)]
             (.read (MavenXpp3Reader.) reader))))
 
@@ -250,23 +290,6 @@
   (proxy [Authenticator] []
     (getPasswordAuthentication []
       (PasswordAuthentication. username (char-array password)))))
-
-(defn- active-proxy
-  "Returns the proxy to route HTTP through as a map, or nil for a direct
-  connection."
-  []
-  #?(:bb
-     (->> (:proxies (get-maven-settings {}))
-          (filter :active)
-          (first))
-
-     :clj
-     (when-let [prxy (some-> ^Settings (get-maven-settings {})
-                             (.getActiveProxy))]
-       {:host (.getHost prxy)
-        :port (.getPort prxy)
-        :username (.getUsername prxy)
-        :password (.getPassword prxy)})))
 
 (defn initialize-proxy-setting!
   []
