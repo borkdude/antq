@@ -14,8 +14,10 @@
     Authenticator
     PasswordAuthentication)))
 
-;; cljstyle cannot parse a reader conditional inside an ns form, so the
-;; JVM-only imports live here.
+;; babashka carries both the :bb and the :clj feature and takes the first
+;; branch that matches, so every reader conditional here leads with :bb.
+;; These imports sit outside the ns form because cljstyle cannot parse a
+;; reader conditional inside one.
 #?(:bb nil
    :clj
    (import eu.maveniverse.maven.mima.context.Context

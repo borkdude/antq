@@ -64,20 +64,18 @@
       (catch Exception _
         (.getCanonicalPath file)))))
 
-(defn- lib-and-coord
-  [{:keys [name version]}]
-  [(symbol name) {:mvn/version version}])
-
 (defn- pom-file*
   "Returns the POM of dep in the local repository, fetching it first when it
   is not there yet."
   ^File
-  [dep]
-  (let [[lib coord] (lib-and-coord dep)
+  [{:as dep :keys [name version]}]
+  (let [lib (symbol name)
+        coord {:mvn/version version}
         config {:mvn/repos (:repositories (repository-opts dep))}
         {:keys [base path]} (ext/lib-location lib coord config)
-        [group-id artifact-id] (str/split (:name dep) #"/" 2)
-        file (io/file base path (str (or artifact-id group-id) "-" (:version dep) ".pom"))]
+        ;; the POM sits beside the artifact, named after it
+        artifact-id (last (butlast (str/split path #"[/\\\\]")))
+        file (io/file base path (str artifact-id "-" version ".pom"))]
     (when-not (.exists file)
       ;; reads the POM into the local repository, without the artifact itself
       (ext/coord-deps lib coord :mvn config))

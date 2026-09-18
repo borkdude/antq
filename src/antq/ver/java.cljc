@@ -11,8 +11,8 @@
   (:import
    clojure.lang.ExceptionInfo))
 
-;; cljstyle cannot parse a reader conditional inside an ns form, so the
-;; platform-specific require and imports live here.
+;; outside the ns form because cljstyle cannot parse a reader conditional
+;; inside one
 #?(:bb (require (quote [clojure.tools.deps.extensions :as deps.ext])))
 
 #?(:bb nil
