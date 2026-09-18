@@ -176,7 +176,9 @@ See link:./doc/gradle.adoc[our Gradle docs] for details.
 [[usage-babashka]]
 === babashka
 
-Antq runs on https://babashka.org[babashka] 1.13.224 or later.
+Antq runs on https://babashka.org[babashka] 1.13.224 or later, which is
+where `clojure.data.json` first ships. Until that release, use a
+https://github.com/babashka/babashka-dev-builds[dev build].
 
 [source,sh]
 ----
