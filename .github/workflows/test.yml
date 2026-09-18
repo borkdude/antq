@@ -35,9 +35,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: DeLaGuardo/setup-clojure@master
-        with:
-          bb: latest
+      # a dev build until clojure.data.json lands in a babashka release
+      - name: Install babashka
+        run: curl -sLO https://raw.githubusercontent.com/babashka/babashka/master/install && chmod +x install && sudo ./install --dev-build
       - uses: actions/cache@v6
         with:
           path: ~/.m2
