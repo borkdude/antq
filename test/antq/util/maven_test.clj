@@ -84,7 +84,7 @@
                                                    :password "gpg-pass"})]
     (let [settings (sut/get-maven-settings {:repositories dummy-repos})
           servers (map #(hash-map
-                         :id (.getId %)
+                         :id (.getId ^Server %)
                          :username (.getUsername %)
                          :password (.getPassword %))
                        (.getServers settings))]

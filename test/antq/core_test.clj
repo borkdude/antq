@@ -326,7 +326,8 @@
 
 (t/deftest forced-artifacts-test
   (t/testing "default"
-    (t/is [] (sut/forced-artifact-version-map {:focus ["foo"]}))
-    (t/is [{:name "foo" :latest-version "2.0.0"}] (sut/forced-artifact-version-map {:focus ["foo@2.0.0"]}))
-    (t/is [{:name "foo" :latest-version "2.0.0"}
-           {:name "foo/zbar2" :latest-version "2"}] (sut/forced-artifact-version-map {:focus ["foo@2.0.0" "foo" "foo/bar" "foo/zbar2@2"]}))))
+    (t/is (= {} (sut/forced-artifact-version-map {:focus ["foo"]})))
+    (t/is (= {"foo" "2.0.0"} (sut/forced-artifact-version-map {:focus ["foo@2.0.0"]})))
+    (t/is (= {"foo" "2.0.0"
+              "foo/zbar2" "2"}
+             (sut/forced-artifact-version-map {:focus ["foo@2.0.0" "foo" "foo/bar" "foo/zbar2@2"]})))))

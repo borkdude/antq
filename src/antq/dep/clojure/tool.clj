@@ -4,11 +4,11 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.tools.deps :as deps]))
+   [clojure.tools.deps.edn :as deps-edn]))
 
 (defn- tools-dir
   ^java.io.File []
-  (-> (deps/user-deps-path)
+  (-> (deps-edn/user-deps-path)
       (io/file)
       (.getParentFile)
       (io/file "tools")))

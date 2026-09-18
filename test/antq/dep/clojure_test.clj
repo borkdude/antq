@@ -5,7 +5,7 @@
    [antq.record :as r]
    [clojure.java.io :as io]
    [clojure.test :as t]
-   [clojure.tools.deps :as deps]))
+   [clojure.tools.deps.edn :as deps-edn]))
 
 (def ^:private file-path
   ;; "path/to/deps.edn"
@@ -88,7 +88,7 @@
                              "cross-project"
                              "test_deps.edn"))
         content (pr-str '{:deps {foo/bar {:mvn/version "0.0.1"}}})]
-    (with-redefs [deps/user-deps-path (constantly cross-project-path)]
+    (with-redefs [deps-edn/user-deps-path (constantly cross-project-path)]
       (t/is (= [(java-dependency
                  {:name "foo/bar"
                   :version "0.0.1"
