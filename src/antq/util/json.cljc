@@ -1,9 +1,11 @@
 (ns ^:no-doc antq.util.json
   "JSON reading and writing. babashka ships cheshire in place of
-  clojure.data.json."
-  (:require
-   #?(:bb [cheshire.core :as json]
-      :clj [clojure.data.json :as json])))
+  clojure.data.json.")
+
+;; cljstyle cannot parse a reader conditional inside an ns form, so the
+;; require lives here.
+#?(:bb (require (quote [cheshire.core :as json]))
+   :clj (require (quote [clojure.data.json :as json])))
 
 (defn read-str
   "Returns the JSON string s parsed into Clojure data with keyword keys."

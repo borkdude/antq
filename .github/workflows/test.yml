@@ -34,11 +34,11 @@ jobs:
   babashka:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: DeLaGuardo/setup-clojure@master
         with:
           bb: latest
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.m2
           key: bb-test-m2-${{ hashFiles('deps.edn') }}-v1

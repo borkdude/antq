@@ -7,19 +7,18 @@
    [antq.util.maven :as u.mvn]
    [antq.ver :as ver]
    [clojure.set :as set]
-   [version-clj.core :as version]
-   #?@(:bb [[clojure.tools.deps.extensions :as deps.ext]]
-       :clj []))
+   [clojure.tools.deps.extensions :as deps.ext]
+   [version-clj.core :as version])
   (:import
-   clojure.lang.ExceptionInfo
-   #?@(:bb []
-       :clj [(org.eclipse.aether
-              DefaultRepositorySystemSession
-              RepositorySystem)
-             (org.eclipse.aether.artifact
-              Artifact)
-             (org.eclipse.aether.resolution
-              VersionRangeRequest)])))
+   clojure.lang.ExceptionInfo))
+
+;; cljstyle cannot parse a reader conditional inside an ns form, so the
+;; JVM-only imports live here.
+#?(:bb nil
+   :clj
+   (import (org.eclipse.aether DefaultRepositorySystemSession RepositorySystem)
+           (org.eclipse.aether.artifact Artifact)
+           (org.eclipse.aether.resolution VersionRangeRequest)))
 
 (defn- get-versions
   "Returns the versions of the artifact in the repositories in opts. Under

@@ -10,9 +10,11 @@
    [clojure.java.io :as io]
    [clojure.tools.deps.extensions.pom :as ext.pom])
   (:import
-   java.io.File
-   #?@(:bb []
-       :clj [org.apache.maven.model.Repository])))
+   java.io.File))
+
+;; cljstyle cannot parse a reader conditional inside an ns form, so the
+;; JVM-only import lives here.
+#?(:bb nil :clj (import org.apache.maven.model.Repository))
 
 (defn extract-repos-from-xml
   [xml]

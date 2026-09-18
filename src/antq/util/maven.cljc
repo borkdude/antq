@@ -8,23 +8,20 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.tools.deps.util.maven :as deps.util.maven]
-   #?@(:bb []
-       :clj [[clojure.tools.deps.util.session :as deps.util.session]]))
+   [clojure.tools.deps.util.session :as deps.util.session])
   (:import
    (java.net
     Authenticator
-    PasswordAuthentication)
-   #?@(:bb []
-       :clj [eu.maveniverse.maven.mima.context.Context
-             (org.apache.maven.settings
-              Server
-              Settings)
-             (org.eclipse.aether
-              DefaultRepositorySystemSession
-              RepositorySystem)
-             (org.eclipse.aether.transfer
-              TransferEvent
-              TransferListener)])))
+    PasswordAuthentication)))
+
+;; cljstyle cannot parse a reader conditional inside an ns form, so the
+;; JVM-only imports live here.
+#?(:bb nil
+   :clj
+   (import eu.maveniverse.maven.mima.context.Context
+           (org.apache.maven.settings Server Settings)
+           (org.eclipse.aether DefaultRepositorySystemSession RepositorySystem)
+           (org.eclipse.aether.transfer TransferEvent TransferListener)))
 
 (def default-repos
   {"central" {:url "https://repo1.maven.org/maven2/"}
@@ -139,8 +136,8 @@
        (transferStarted [_ _event])
        (transferCorrupted [_ event]
          (log/warning (str "Download corrupted:" (.. ^TransferEvent event getException getMessage))))
-    ;; This happens when Maven can't find an artifact in a particular repo
-    ;; (but still may find it in a different repo), ie this is a common event
+       ;; This happens when Maven can't find an artifact in a particular repo
+       ;; (but still may find it in a different repo), ie this is a common event
        (transferFailed [_ _event])
        (transferInitiated [_ _event])
        (transferProgressed [_ _event])
@@ -156,9 +153,9 @@
            settings ^Settings (get-maven-settings opts)
            context ^Context (deps.util.maven/make-context :local-repo local-repo :settings settings)
            session ^DefaultRepositorySystemSession (deps.util.maven/make-system-session context)
-        ;; Overwrite TransferListener not to show "Downloading" messages
+           ;; Overwrite TransferListener not to show "Downloading" messages
            _ (.setTransferListener session custom-transfer-listener)
-        ;; c.f. https://stackoverflow.com/questions/35488167/how-can-you-find-the-latest-version-of-a-maven-artifact-from-java-using-aether
+           ;; c.f. https://stackoverflow.com/questions/35488167/how-can-you-find-the-latest-version-of-a-maven-artifact-from-java-using-aether
            artifact (deps.util.maven/coord->artifact lib {:mvn/version version})
            remote-repos (deps.util.maven/remote-repos system session (:repositories opts))]
        {:system system
