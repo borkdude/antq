@@ -12,10 +12,6 @@ test: install ## Run tests
 	clojure -M:dev:test
 	script/integration_test.sh
 
-.PHONY: bb-test
-bb-test: ## Run antq on babashka
-	bb bb-test
-
 .PHONY: lint
 lint: ## Run linters
 	cljstyle check
