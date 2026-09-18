@@ -32,14 +32,10 @@
 (t/deftest extract-deps-with-properties-test
   (let [deps (sut/extract-deps
               file-path
-              (io/file (io/resource "dep/test_pom_properties.xml")))
-        dependency' (fn [m]
-                      (assoc-in (dependency m)
-                                [:repositories "central"]
-                                {:url "https://repo.maven.apache.org/maven2"}))]
+              (io/file (io/resource "dep/test_pom_properties.xml")))]
     (t/is (sequential? deps))
-    (t/is (= #{(dependency' {:name "org.clojure/clojure" :version "1.4.0"})
-               (dependency' {:name "org.tcrawley/dynapath" :version "1.0.0"})}
+    (t/is (= #{(dependency {:name "org.clojure/clojure" :version "1.4.0"})
+               (dependency {:name "org.tcrawley/dynapath" :version "1.0.0"})}
              (set deps)))))
 
 (t/deftest extract-deps-with-parent-child-pom-test
@@ -47,7 +43,7 @@
               file-path
               (io/file (io/resource "dep/child_pom/child/pom.xml")))]
     (t/is (= [(assoc (dependency {:name "org.clojure/clojure" :version "1.5.0"})
-                     :repositories {"central" {:url "https://repo.maven.apache.org/maven2"}})]
+                     :repositories {})]
              deps))))
 
 (t/deftest load-deps-test

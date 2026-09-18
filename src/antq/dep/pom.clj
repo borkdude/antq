@@ -8,13 +8,12 @@
    [antq.util.xml :as u.xml]
    [clojure.data.xml :as xml]
    [clojure.java.io :as io]
-   [clojure.tools.deps.extensions.pom :as ext.pom])
+   [clojure.tools.deps.extensions :as ext]
+   [clojure.tools.deps.extensions.pom])
   (:import
-   java.io.File))
-
-;; cljstyle cannot parse a reader conditional inside an ns form, so the
-;; JVM-only import lives here.
-#?(:bb nil :clj (import org.apache.maven.model.Repository))
+   java.io.File
+   java.nio.file.Files
+   java.nio.file.attribute.FileAttribute))
 
 (defn extract-repos-from-xml
   [xml]
@@ -40,40 +39,39 @@
                                     :version version
                                     :repositories repos}))))))
 
-(defn- read-model
-  "Returns the effective model of the POM in file. Returns Maven's `Model`
-  on the JVM, and a map under babashka."
-  [^File file config]
-  #?(:bb (ext.pom/read-model (slurp file) config nil)
-     :clj (ext.pom/read-model-file file config)))
-
-(defn- model-repositories
-  [model]
-  #?(:bb (reduce (fn [accm {:keys [id url]}]
-                   (assoc accm id {:url url}))
-                 {} (:repositories model))
-     :clj (reduce (fn [accm ^Repository repo]
-                    (assoc accm (.getId repo) {:url (.getUrl repo)}))
-                  {} (.getRepositories ^org.apache.maven.model.Model model))))
+(defn- pom-root
+  "Returns the directory tools.deps should read the pom from. It reads a file
+  named pom.xml only, so content under any other name is staged in a temp
+  directory."
+  ^String [^File file ^String content]
+  (if (= "pom.xml" (.getName file))
+    (.getParent (.getAbsoluteFile file))
+    (let [dir (.toFile (Files/createTempDirectory "antq-pom" (into-array FileAttribute [])))
+          staged (io/file dir "pom.xml")]
+      (.deleteOnExit dir)
+      (.deleteOnExit staged)
+      (spit staged content)
+      (.getPath dir))))
 
 (defn extract-deps
+  "Reads the dependencies of a pom.xml through tools.deps, so that a version
+  inherited from a parent or held in a property is resolved. Falls back to
+  reading the XML when the model cannot be built."
   [^String file-path ^File file]
-  (try
-    (let [config {:mvn/repos u.mvn/default-repos}
-          model (read-model file config)
-          repos (model-repositories model)]
-      (for [[dep-name attr] (ext.pom/model-deps model)]
-        (r/map->Dependency {:project :pom
-                            :type :java
-                            :file file-path
-                            :name (str dep-name)
-                            :version (:mvn/version attr)
-                            :repositories repos})))
-    (catch Exception _
-      ;; Fall back to pasing XML
-      (extract-deps-from-xml-string
-       file-path
-       (slurp file)))))
+  (let [content (slurp file)]
+    (try
+      (let [root (pom-root file content)
+            repos (extract-repos-from-xml (xml-seq (xml/parse-str content)))]
+        (for [[dep-name attr] (ext/coord-deps 'antq/pom {:deps/root root} :pom
+                                              {:mvn/repos u.mvn/default-repos})]
+          (r/map->Dependency {:project :pom
+                              :type :java
+                              :file file-path
+                              :name (str dep-name)
+                              :version (:mvn/version attr)
+                              :repositories repos})))
+      (catch Exception _
+        (extract-deps-from-xml-string file-path content)))))
 
 (defn load-deps
   {:malli/schema [:function
