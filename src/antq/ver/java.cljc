@@ -7,13 +7,14 @@
    [antq.util.maven :as u.mvn]
    [antq.ver :as ver]
    [clojure.set :as set]
-   [clojure.tools.deps.extensions :as deps.ext]
    [version-clj.core :as version])
   (:import
    clojure.lang.ExceptionInfo))
 
 ;; cljstyle cannot parse a reader conditional inside an ns form, so the
-;; JVM-only imports live here.
+;; platform-specific require and imports live here.
+#?(:bb (require (quote [clojure.tools.deps.extensions :as deps.ext])))
+
 #?(:bb nil
    :clj
    (import (org.eclipse.aether DefaultRepositorySystemSession RepositorySystem)
