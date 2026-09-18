@@ -43,4 +43,4 @@ jobs:
           path: ~/.m2
           key: bb-test-m2-${{ hashFiles('deps.edn') }}-v1
       - name: run antq on babashka
-        run: make bb-test
+        run: bb bb-test

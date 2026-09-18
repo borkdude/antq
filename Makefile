@@ -14,7 +14,7 @@ test: install ## Run tests
 
 .PHONY: bb-test
 bb-test: ## Run antq on babashka
-	script/bb_test.sh
+	bb bb-test
 
 .PHONY: lint
 lint: ## Run linters
