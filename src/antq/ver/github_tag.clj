@@ -5,9 +5,9 @@
    [antq.util.async :as u.async]
    [antq.util.exception :as u.ex]
    [antq.util.git :as u.git]
-   [antq.util.json :as u.json]
    [antq.util.ver :as u.ver]
    [antq.ver :as ver]
+   [clojure.data.json :as json]
    [clojure.string :as str]
    [version-clj.core :as version]))
 
@@ -38,7 +38,7 @@
 (defn- get-sorted-versions-by-url*
   [url]
   (-> (slurp url)
-      (u.json/read-str)
+      (json/read-str :key-fn keyword)
       (->> (map :name)
            (filter (comp u.ver/sem-ver?
                          u.ver/remove-qualifiers

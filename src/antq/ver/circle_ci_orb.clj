@@ -1,8 +1,8 @@
 (ns ^:no-doc antq.ver.circle-ci-orb
   (:require
    [antq.log :as log]
-   [antq.util.json :as u.json]
    [antq.ver :as ver]
+   [clojure.data.json :as json]
    [clojure.java.io :as io]
    [clojure.string :as str]))
 
@@ -11,7 +11,7 @@
   (try
     (-> (io/as-url (str "https://internal.circleci.com/api/v2/orbs?ns=" orb-ns "&name=" orb-name))
         slurp
-        (u.json/read-str)
+        (json/read-str :key-fn keyword)
         :items
         first
         :id)
@@ -24,7 +24,7 @@
   (try
     (-> (io/as-url (str "https://internal.circleci.com/api/v2/orbs/" id))
         slurp
-        (u.json/read-str)
+        (json/read-str :key-fn keyword)
         :versions)
     (catch Exception ex
       (log/error (str "Failed to fetch orb versions from circleci: "
