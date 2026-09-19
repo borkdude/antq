@@ -1,14 +1,15 @@
 (ns ^:no-doc antq.util.dep
   (:require
    [antq.constant :as const]
+   [antq.log :as log]
    [antq.util.async :as u.async]
    [antq.util.function :as u.fn]
    [antq.util.maven :as u.mvn]
    [antq.util.url :as u.url]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.tools.deps.extensions :as ext]
-   [clojure.tools.deps.extensions.maven])
+   [clojure.tools.deps :as deps]
+   [clojure.tools.deps.extensions :as ext])
   (:import
    java.io.File))
 
@@ -65,21 +66,23 @@
         (.getCanonicalPath file)))))
 
 (defn- pom-file*
-  "Returns the POM of dep in the local repository, fetching it first when it
-  is not there yet."
+  "Returns the POM of dep in the local repository, or nil when it cannot be
+  read. Reading a Maven coordinate's dependencies caches its POM there, which
+  is the only route tools.deps offers to the POM itself."
   ^File
-  [{:as dep :keys [name version]}]
-  (let [lib (symbol name)
+  [dep]
+  (let [lib (symbol (:name dep))
+        version (:version dep)
         coord {:mvn/version version}
         config {:mvn/repos (:repositories (repository-opts dep))}
-        {:keys [base path]} (ext/lib-location lib coord config)
-        ;; the POM sits beside the artifact, named after it
-        artifact-id (last (butlast (str/split path #"[/\\\\]")))
+        {:keys [base path]} (deps/lib-location lib coord config)
+        artifact-id (first (str/split (name lib) #"\$"))
         file (io/file base path (str artifact-id "-" version ".pom"))]
     (when-not (.exists file)
-      ;; reads the POM into the local repository, without the artifact itself
       (ext/coord-deps lib coord :mvn config))
-    file))
+    (if (.exists file)
+      file
+      (log/warning (str "No POM in the local repository for " lib " " version)))))
 
 (def ^:private pom-file-with-timeout
   (u.async/fn-with-timeout
@@ -89,7 +92,7 @@
 (defn- get-scm-url*
   [dep]
   (try
-    (let [{:keys [url scm-url]} (u.mvn/read-pom (pom-file-with-timeout dep))]
+    (let [{:keys [url scm-url]} (some-> (pom-file-with-timeout dep) (u.mvn/read-pom))]
       (some-> (or scm-url url)
               (u.url/ensure-https)
               (u.url/ensure-git-https-url)))
