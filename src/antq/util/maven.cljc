@@ -12,14 +12,16 @@
   (:import
    (java.net
     Authenticator
-    PasswordAuthentication)))
+    PasswordAuthentication)
+   (org.apache.maven.settings
+    Server
+    Settings)))
 
 ;; outside the ns form because cljstyle cannot parse a reader conditional
 ;; inside one
 #?(:bb nil
    :clj
    (import eu.maveniverse.maven.mima.context.Context
-           (org.apache.maven.settings Server Settings)
            (org.eclipse.aether DefaultRepositorySystemSession RepositorySystem)
            (org.eclipse.aether.transfer TransferEvent TransferListener)))
 
@@ -54,15 +56,13 @@
     (or (u.lein/env x)
         (str x))))
 
-#?(:bb nil
-   :clj
-   (defn- new-repository-server
-     ^Server
-     [{:keys [id username password]}]
-     (doto (Server.)
-       (.setId id)
-       (.setUsername (ensure-username-or-password username))
-       (.setPassword (ensure-username-or-password password)))))
+(defn- new-repository-server
+  ^Server
+  [{:keys [id username password]}]
+  (doto (Server.)
+    (.setId id)
+    (.setUsername (ensure-username-or-password username))
+    (.setPassword (ensure-username-or-password password))))
 
 (defn- get-auth-info
   [repository]
@@ -83,49 +83,29 @@
 ;; In Leiningen, authentication information is defined in project.clj or profiles.clj instead of ~/.m2/settings.xml,
 ;; so if there is authentication information in `:repositories`, apply to `settings`
 (defn get-maven-settings
-  "Returns the Maven settings with the authentication in opts added.
-  Returns Maven's `Settings` on the JVM, and a map under babashka."
+  ^Settings
   [opts]
-  #?(:bb
-     (let [settings (deps.util.maven/get-settings)]
-       (reduce (fn [settings repo]
-                 (let [{:keys [id username password]} (get-auth-info repo)]
-                   (if (and username password (not (get-in settings [:servers id])))
-                     (assoc-in settings [:servers id]
-                               {:username (ensure-username-or-password username)
-                                :password (ensure-username-or-password password)})
-                     settings)))
-               (update settings :servers #(or % {}))
-               (:repositories opts)))
-
-     :clj
-     (let [settings ^Settings (deps.util.maven/get-settings)
-           server-ids (set (map #(.getId ^Server %) (.getServers settings)))]
-       (doseq [repo (:repositories opts)]
-         (let [{:keys [id username password]} (get-auth-info repo)]
-           (when (and username
-                      password
-                      (not (contains? server-ids id)))
-             (.addServer settings
-                         (new-repository-server {:id id :username username :password password})))))
-       settings)))
+  (let [settings ^Settings (deps.util.maven/get-settings)
+        server-ids (set (map #(.getId ^Server %) (.getServers settings)))]
+    (doseq [repo (:repositories opts)]
+      (let [{:keys [id username password]} (get-auth-info repo)]
+        (when (and username
+                   password
+                   (not (contains? server-ids id)))
+          (.addServer settings
+                      (new-repository-server {:id id :username username :password password})))))
+    settings))
 
 (defn- active-proxy
   "Returns the proxy to route HTTP through as a map, or nil for a direct
   connection."
   []
-  #?(:bb
-     (->> (:proxies (get-maven-settings {}))
-          (filter :active)
-          (first))
-
-     :clj
-     (when-let [prxy (some-> ^Settings (get-maven-settings {})
-                             (.getActiveProxy))]
-       {:host (.getHost prxy)
-        :port (.getPort prxy)
-        :username (.getUsername prxy)
-        :password (.getPassword prxy)})))
+  (when-let [prxy (some-> ^Settings (get-maven-settings {})
+                          (.getActiveProxy))]
+    {:host (.getHost prxy)
+     :port (.getPort prxy)
+     :username (.getUsername prxy)
+     :password (.getPassword prxy)}))
 
 #?(:bb nil
    :clj
