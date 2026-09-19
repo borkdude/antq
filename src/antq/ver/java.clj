@@ -1,6 +1,7 @@
 (ns ^:no-doc antq.ver.java
   (:require
    [antq.constant :as const]
+   [antq.util.aether :as u.aether]
    [antq.util.async :as u.async]
    [antq.util.dep :as u.dep]
    [antq.util.exception :as u.ex]
@@ -9,30 +10,11 @@
    [clojure.set :as set]
    [version-clj.core :as version])
   (:import
-   clojure.lang.ExceptionInfo
-   (org.eclipse.aether
-    DefaultRepositorySystemSession
-    RepositorySystem)
-   (org.eclipse.aether.artifact
-    Artifact)
-   (org.eclipse.aether.resolution
-    VersionRangeRequest)))
-
-(defn- get-versions
-  [name opts]
-  (let [{:keys [^RepositorySystem system
-                ^DefaultRepositorySystemSession  session
-                ^Artifact artifact
-                remote-repos]} (u.mvn/repository-system name "[0,)" opts)
-        req (doto (VersionRangeRequest.)
-              (.setArtifact artifact)
-              (.setRepositories remote-repos))]
-    (->> (.resolveVersionRange system session req)
-         (.getVersions))))
+   clojure.lang.ExceptionInfo))
 
 (def ^:private get-versions-with-timeout
   (u.async/fn-with-timeout
-   get-versions
+   u.aether/get-versions
    const/maven-timeout-msec))
 
 (defn get-sorted-versions-by-name*
