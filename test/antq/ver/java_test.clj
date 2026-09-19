@@ -8,6 +8,13 @@
    [clojure.set :as set]
    [clojure.test :as t]))
 
+(t/deftest find-versions-test
+  (let [vers (#'sut/find-versions "org.clojure/clojure"
+                                  {:repositories u.mvn/default-repos})]
+    (t/is (contains? (set vers) "1.11.1"))
+    (t/testing "snapshots are left out"
+      (t/is (not-any? u.mvn/snapshot? vers)))))
+
 (defn- dummy-versions
   [_ opts]
   (concat

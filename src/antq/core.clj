@@ -40,7 +40,7 @@
    [antq.upgrade.leiningen]
    [antq.upgrade.pom]
    [antq.upgrade.shadow]
-   [antq.util.aether :as u.aether]
+   [antq.util.bb :refer [if-bb]]
    [antq.util.exception :as u.ex]
    [antq.util.file :as u.file]
    [antq.util.ver :as u.ver]
@@ -333,7 +333,7 @@
 
 (defn main*
   [options errors]
-  (u.aether/initialize-proxy-setting!)
+  (if-bb nil ((requiring-resolve 'antq.util.aether/initialize-proxy-setting!)))
   (let [options (cond-> (update options :directory u.file/distinct-directory)
                   ;; Force "format" reporter when :error-format is specified
                   (some? (:error-format options)) (assoc :reporter "format"))
