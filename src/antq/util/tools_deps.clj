@@ -61,24 +61,38 @@
   (cond-> {:mvn/repos (update-vals repositories #(select-keys % [:url :releases :snapshots]))}
     *local-repo* (assoc :mvn/local-repo *local-repo*)))
 
+(defonce ^:private lib-locks (atom {}))
+
+(defn- lib-lock
+  "Returns the monitor that serializes the version lookups of lib."
+  [lib]
+  (or (get @lib-locks lib)
+      (get (swap! lib-locks update lib #(or % (Object.))) lib)))
+
 (defn- forget-versions!
-  "Drops the cached version listings. babashka keys them without the
+  "Drops the cached version listings of lib. babashka keys them without the
   repositories, so another repository would be given this listing."
-  []
-  (if-bb
-   (let [store ^ConcurrentHashMap session/session]
-     (doseq [k (vec (.keySet store))
-             :when (and (vector? k) (= :babashka.impl.mvn/versions (first k)))]
-       (.remove store k)))
-   nil))
+  [lib]
+  (let [store ^ConcurrentHashMap session/session]
+    (doseq [k (vec (.keySet store))
+            :when (and (vector? k)
+                       (= :babashka.impl.mvn/versions (first k))
+                       (= lib (second k)))]
+      (.remove store k))))
 
 (defn find-versions
   "Returns the release versions of lib in repositories, oldest first."
   [lib repositories]
   (ensure-credentials! repositories)
-  (let [lib (symbol lib)]
-    (forget-versions!)
-    (map :mvn/version (ext/find-versions lib nil :mvn (config repositories)))))
+  (let [lib (symbol lib)
+        versions #(map :mvn/version (ext/find-versions lib nil :mvn (config repositories)))]
+    (if-bb
+     ;; the drop and the lookup are one step, the cache entry is filled while
+     ;; it is held
+     (locking (lib-lock lib)
+       (forget-versions! lib)
+       (doall (versions)))
+     (versions))))
 
 (defn coord-deps
   "Returns the dependencies of lib at version. Fetches its POM into the local

@@ -43,6 +43,7 @@
   Paths under /open need no credentials."
   [path header]
   (cond
+    (str/starts-with? path "/slow/a/") (do (Thread/sleep 1000) [200 metadata])
     (str/starts-with? path "/open/b/") [200 other-metadata]
     (str/starts-with? path "/open/a/") [200 metadata]
     (not= header authorization) [401 ""]
@@ -103,11 +104,21 @@
       (fn [url]
         ;; the credentials are the same, so the session is not reseeded between
         ;; the two lookups
-        (t/testing "each repository has its own versions of one lib"
-          (t/is (= ["1.0.0"]
-                   (sut/find-versions 'acme/lib {"a" {:url (str url "open/a/")}})))
-          (t/is (= ["1.0.0" "2.0.0"]
-                   (sut/find-versions 'acme/lib {"b" {:url (str url "open/b/")}}))))))))
+        (let [look (fn [id path] (sut/find-versions 'acme/lib {id {:url (str url path)}}))]
+          (t/testing "each repository has its own versions of one lib"
+            (t/is (= ["1.0.0"] (look "a" "open/a/")))
+            (t/is (= ["1.0.0" "2.0.0"] (look "b" "open/b/"))))
+
+          (t/testing "and in parallel, where one lookup fills the cache of the other"
+            (let [local sut/*local-repo*
+                  in-parallel (fn [id path]
+                                (future (binding [sut/*local-repo* local]
+                                          (vec (look id path)))))
+                  a (in-parallel "slow-a" "slow/a/")
+                  _ (Thread/sleep 200)
+                  b (in-parallel "b" "open/b/")]
+              (t/is (= ["1.0.0"] @a))
+              (t/is (= ["1.0.0" "2.0.0"] @b)))))))))
 
 (t/deftest credentials-test
   ;; tools.deps refuses an http: repository without this
