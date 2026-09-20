@@ -25,10 +25,9 @@
   (with-redefs [sut/get-versions-with-timeout dummy-versions]
     (t/is (= ["2" "1"]
              (get-sorted-versions {:version "1.0.0"})))
-    (t/is (= ["2" "1.6-SNAPSHOT" "1"]
-             (get-sorted-versions {:version "1.0.0-SNAPSHOT"})))
-    (t/is (= ["2" "1.6-SNAPSHOT" "1"]
-             (get-sorted-versions {:version "1.0.0-snapshot"}))))
+    (t/testing "a snapshot dependency is offered releases only"
+      (t/is (= ["2" "1"]
+               (get-sorted-versions {:version "1.0.0-SNAPSHOT"})))))
 
   (t/testing "normalizing repository URL"
     (with-redefs [sut/get-sorted-versions-by-name (fn [_ opts _] opts)]

@@ -8,8 +8,8 @@ outdated: ## Run antq to detect outdated dependencies
 
 .PHONY: test
 test: ## Run unit tests
-	clojure -M:dev:1.11:test --skip-meta integration
-	clojure -M:dev:test --skip-meta integration
+	CLOJURE_CLI_ALLOW_HTTP_REPO=true clojure -M:dev:1.11:test --skip-meta integration
+	CLOJURE_CLI_ALLOW_HTTP_REPO=true clojure -M:dev:test --skip-meta integration
 
 .PHONY: test-integration
 test-integration: ## Run integration tests

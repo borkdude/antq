@@ -1,6 +1,8 @@
 (ns antq.util.maven-test
   (:require
    [antq.test-helper :as h]
+   [antq.util.env :as u.env]
+   [antq.util.leiningen :as u.lein]
    [antq.util.maven :as sut]
    [clojure.data.xml :as xml]
    [clojure.java.io :as io]
@@ -38,6 +40,17 @@
     true "foo-snapshot"
     true "foo-SnapShot"
     true "foo-SNAPSHOT"))
+
+(t/deftest credentials-test
+  (with-redefs [u.env/getenv {"LEIN_PASSWORD" "lein-pass" "FOUR" "env-four"}
+                u.lein/get-credential (constantly {:username "gpg-user" :password "gpg-pass"})]
+    (t/is (= {"plain" {:url "https://one.example.com" :username "user" :password "pass"}
+              "env" {:url "https://two.example.com" :username "lein-pass" :password "env-four"}
+              "gpg" {:url "https://three.example.com" :username "gpg-user" :password "gpg-pass"}}
+             (sut/credentials {"plain" {:url "https://one.example.com" :username "user" :password "pass"}
+                               "env" {:url "https://two.example.com" :username :env :password :env/four}
+                               "gpg" {:url "https://three.example.com" :creds :gpg}
+                               "open" {:url "https://four.example.com"}})))))
 
 (t/deftest read-pom-test
   (t/is (= {:url "https://github.com/clj-commons/antq"

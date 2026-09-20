@@ -1,25 +1,29 @@
 (ns ^:no-doc antq.ver.java
   (:require
    [antq.constant :as const]
-   [antq.util.aether :as u.aether]
    [antq.util.async :as u.async]
    [antq.util.dep :as u.dep]
    [antq.util.exception :as u.ex]
    [antq.util.maven :as u.mvn]
+   [antq.util.tools-deps :as u.tools-deps]
    [antq.ver :as ver]
    [clojure.set :as set]
    [version-clj.core :as version])
   (:import
    clojure.lang.ExceptionInfo))
 
+(defn- get-versions
+  [name opts]
+  (u.tools-deps/find-versions name (:repositories opts)))
+
 (def ^:private get-versions-with-timeout
   (u.async/fn-with-timeout
-   u.aether/get-versions
+   get-versions
    const/maven-timeout-msec))
 
 (defn get-sorted-versions-by-name*
   [name
-   {:as dep-opts :keys [snapshots?]}
+   dep-opts
    options]
   (try
     (let [maven-vers (->> (get-versions-with-timeout name dep-opts)
@@ -31,8 +35,7 @@
           sorted-versions (->> versions
                                (sort version/version-compare)
                                (reverse))]
-      (cond->> sorted-versions
-        (not snapshots?) (remove ver/snapshot?)))
+      (remove ver/snapshot? sorted-versions))
     (catch ExceptionInfo ex
       (if (u.ex/ex-timeout? ex)
         [ex]

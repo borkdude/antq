@@ -5,11 +5,10 @@
    [antq.util.async :as u.async]
    [antq.util.function :as u.fn]
    [antq.util.maven :as u.mvn]
+   [antq.util.tools-deps :as u.tools-deps]
    [antq.util.url :as u.url]
    [clojure.java.io :as io]
-   [clojure.string :as str]
-   [clojure.tools.deps :as deps]
-   [clojure.tools.deps.extensions :as ext])
+   [clojure.string :as str])
   (:import
    java.io.File))
 
@@ -40,8 +39,7 @@
   [dep]
   {:repositories (-> u.mvn/default-repos
                      (merge (:repositories dep))
-                     (u.mvn/normalize-repos))
-   :snapshots? (u.mvn/snapshot? (:version dep))})
+                     (u.mvn/normalize-repos))})
 
 (defmulti normalize-version-by-name
   (fn [dep] (:name dep)))
@@ -73,14 +71,13 @@
   [dep]
   (let [lib (symbol (:name dep))
         version (:version dep)
-        coord {:mvn/version version}
-        config {:mvn/repos (:repositories (repository-opts dep))}
-        {:keys [base path]} (deps/lib-location lib coord config)
+        repositories (:repositories (repository-opts dep))
+        {:keys [base path]} (u.tools-deps/lib-location lib version repositories)
         artifact-id (first (str/split (name lib) #"\$"))
         file (io/file base path (str artifact-id "-" version ".pom"))]
     (when-not (.exists file)
       (try
-        (ext/coord-deps lib coord :mvn config)
+        (u.tools-deps/coord-deps lib version repositories)
         (catch Exception ex
           (log/warning (str "Failed to read the POM of " lib " " version ": "
                             (->> ex (iterate ex-cause) (take-while some?) last ex-message))))))

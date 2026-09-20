@@ -58,12 +58,10 @@
            (sut/name-candidates ""))))
 
 (t/deftest repository-opts-test
-  (t/is (= {:repositories u.mvn/default-repos
-            :snapshots? false}
+  (t/is (= {:repositories u.mvn/default-repos}
            (sut/repository-opts (r/map->Dependency {:version "1.0.0"}))))
   (t/is (= {:repositories (assoc u.mvn/default-repos
-                                 "foo" {:url "s3://foo"})
-            :snapshots? true}
+                                 "foo" {:url "s3://foo"})}
            (sut/repository-opts (r/map->Dependency {:repositories {"foo" {:url "s3p://foo"}}
                                                     :version "1.0.0-SNAPSHOT"})))))
 

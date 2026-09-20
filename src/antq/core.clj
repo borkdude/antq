@@ -40,9 +40,9 @@
    [antq.upgrade.leiningen]
    [antq.upgrade.pom]
    [antq.upgrade.shadow]
-   [antq.util.aether :as u.aether]
    [antq.util.exception :as u.ex]
    [antq.util.file :as u.file]
+   [antq.util.maven :as u.maven]
    [antq.util.ver :as u.ver]
    [antq.ver :as ver]
    [antq.ver.circle-ci-orb]
@@ -335,7 +335,7 @@
 
 (defn main*
   [options errors]
-  (u.aether/initialize-proxy-setting!)
+  (u.maven/initialize-proxy-setting!)
   (let [options (cond-> (update options :directory u.file/distinct-directory)
                   ;; Force "format" reporter when :error-format is specified
                   (some? (:error-format options)) (assoc :reporter "format"))

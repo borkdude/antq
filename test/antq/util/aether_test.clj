@@ -3,8 +3,6 @@
    [antq.util.aether :as sut]
    [antq.util.env :as u.env]
    [antq.util.leiningen :as u.lein]
-   [antq.util.maven :as u.mvn]
-   [clojure.edn :as edn]
    [clojure.test :as t]
    [clojure.tools.deps.util.maven :as deps.util.maven])
   (:import
@@ -44,10 +42,6 @@
   {"LEIN_PASSWORD" "lein-pass"
    "FOUR" "env-four"})
 
-(def ^:private current-clojure-version
-  (get-in (edn/read-string (slurp "deps.edn"))
-          [:deps 'org.clojure/clojure :mvn/version]))
-
 (t/deftest get-maven-settings-test
   (with-redefs [deps.util.maven/get-settings (constantly dummy-settings)
                 u.env/getenv #(get dummy-env %)
@@ -71,9 +65,3 @@
                  ;; from profiles.clj with gpg
                  {:id "serv5" :username "gpg-user" :password "gpg-pass"}}
                (set servers))))))
-
-(t/deftest get-versions-test
-  (let [vers (sut/get-versions 'org.clojure/clojure
-                               {:repositories u.mvn/default-repos})]
-    (t/is (seq vers))
-    (t/is (contains? (set (map str vers)) current-clojure-version))))

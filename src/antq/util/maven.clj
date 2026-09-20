@@ -1,12 +1,17 @@
 (ns ^:no-doc antq.util.maven
   (:require
    [antq.log :as log]
+   [antq.util.bb :refer [if-bb]]
    [antq.util.env :as u.env]
    [antq.util.leiningen :as u.lein]
    [antq.util.xml :as u.xml]
    [clojure.data.xml :as xml]
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  (:import
+   (java.net
+    Authenticator
+    PasswordAuthentication)))
 
 (def default-repos
   {"central" {:url "https://repo1.maven.org/maven2/"}
@@ -38,6 +43,22 @@
     x
     (or (u.lein/env x)
         (str x))))
+
+(defn credentials
+  "Returns a map of repository id to :url, :username and :password for the
+  repositories that carry credentials."
+  [repositories]
+  (into {}
+        (keep (fn [[id {:keys [url username password creds]}]]
+                (let [{:keys [username password]}
+                      (cond
+                        (and username password) {:username username :password password}
+                        (= :gpg creds) (u.lein/get-credential url))]
+                  (when (and username password)
+                    [id {:url url
+                         :username (ensure-username-or-password username)
+                         :password (ensure-username-or-password password)}]))))
+        repositories))
 
 (defn read-pom
   "Returns the url and scm url of a POM file as a map."
@@ -72,3 +93,33 @@
 
 (def get-local-versions
   (memoize get-local-versions*))
+
+(defn authenticator
+  ^Authenticator
+  [^String username ^String password]
+  (proxy [Authenticator] []
+    (getPasswordAuthentication []
+      (PasswordAuthentication. username (char-array password)))))
+
+(defn- active-proxy
+  "Returns the active proxy of the user's Maven settings as a map, or nil if
+  none is active."
+  []
+  (if-bb
+   ;; babashka's get-settings returns the settings as data
+   (->> (:proxies ((requiring-resolve 'clojure.tools.deps.util.maven/get-settings)))
+        (filter :active)
+        (first))
+   ((requiring-resolve 'antq.util.aether/active-proxy))))
+
+(defn initialize-proxy-setting!
+  []
+  (when-let [{:keys [host port username password]} (active-proxy)]
+    (System/setProperty "http.proxyHost" host)
+    (System/setProperty "http.proxyPort" (str port))
+    (System/setProperty "https.proxyHost" host)
+    (System/setProperty "https.proxyPort" (str port))
+    (when (and username password)
+      (System/setProperty "jdk.http.auth.tunneling.disabledSchemes" "")
+      (System/setProperty "jdk.http.auth.proxying.disabledSchemes" "")
+      (Authenticator/setDefault (authenticator username password)))))

@@ -2,68 +2,42 @@
   "Code that uses Aether or Maven's settings classes. Keep it in this namespace."
   (:require
    [antq.log :as log]
-   [antq.util.leiningen :as u.lein]
    [antq.util.maven :as u.mvn]
    [clojure.tools.deps.util.maven :as deps.util.maven]
    [clojure.tools.deps.util.session :as deps.util.session])
   (:import
    eu.maveniverse.maven.mima.context.Context
-   (java.net
-    Authenticator
-    PasswordAuthentication)
+   java.util.concurrent.ConcurrentHashMap
    (org.apache.maven.settings
     Server
     Settings)
-   (org.eclipse.aether
-    DefaultRepositorySystemSession
-    RepositorySystem)
-   (org.eclipse.aether.artifact
-    Artifact)
-   (org.eclipse.aether.resolution
-    VersionRangeRequest)
+   org.eclipse.aether.DefaultRepositorySystemSession
    (org.eclipse.aether.transfer
     TransferEvent
     TransferListener)))
 
-(defn- new-repository-server
-  ^Server
-  [{:keys [id username password]}]
-  (doto (Server.)
-    (.setId id)
-    (.setUsername (u.mvn/ensure-username-or-password username))
-    (.setPassword (u.mvn/ensure-username-or-password password))))
-
-(defn- get-auth-info
-  [repository]
-  (let [[id {:keys [url username password creds]}] repository]
-    (cond
-      (and username password)
-      {:id id
-       :username username
-       :password password}
-
-      (= :gpg creds)
-      (let [credential-info (u.lein/get-credential url)]
-        {:id id
-         :username (:username credential-info)
-         :password (:password credential-info)}))))
+(defn- settings-with
+  "Returns the user's Maven settings with a server added for each entry of
+  credentials that settings.xml does not name."
+  ^Settings
+  [credentials]
+  (let [settings ^Settings (deps.util.maven/get-settings)
+        server-ids (set (map #(.getId ^Server %) (.getServers settings)))]
+    (doseq [[id {:keys [username password]}] credentials
+            :when (not (contains? server-ids id))]
+      (.addServer settings (doto (Server.)
+                             (.setId id)
+                             (.setUsername username)
+                             (.setPassword password))))
+    settings))
 
 (defn get-maven-settings
   ^Settings
   [opts]
-  (let [settings ^Settings (deps.util.maven/get-settings)
-        server-ids (set (map #(.getId ^Server %) (.getServers settings)))]
-    ;; NOTE
-    ;; In Leiningen, authentication information is defined in project.clj or profiles.clj instead of ~/.m2/settings.xml,
-    ;; so if there is authentication information in `:repositories`, apply to `settings`
-    (doseq [repo (:repositories opts)]
-      (let [{:keys [id username password]} (get-auth-info repo)]
-        (when (and username
-                   password
-                   (not (contains? server-ids id)))
-          (.addServer settings
-                      (new-repository-server {:id id :username username :password password})))))
-    settings))
+  ;; NOTE
+  ;; In Leiningen, authentication information is defined in project.clj or profiles.clj instead of ~/.m2/settings.xml,
+  ;; so if there is authentication information in `:repositories`, apply to `settings`
+  (settings-with (u.mvn/credentials (:repositories opts))))
 
 (def ^TransferListener custom-transfer-listener
   "Copy from clojure.tools.deps.util.maven/console-listener
@@ -79,56 +53,25 @@
     (transferProgressed [_ _event])
     (transferSucceeded [_ _event])))
 
-(defn repository-system
-  [name version opts]
-  (let [lib (cond-> name (string? name) symbol)
-        local-repo @deps.util.maven/cached-local-repo
-        system ^RepositorySystem (deps.util.session/retrieve :mvn/system #(deps.util.maven/make-system))
-        settings ^Settings (get-maven-settings opts)
-        context ^Context (deps.util.maven/make-context :local-repo local-repo :settings settings)
+(defn seed-session!
+  "Puts a Maven context with credentials as servers into the tools.deps
+  session, where the :mvn extension looks it up."
+  [credentials]
+  (let [context ^Context (deps.util.maven/make-context :settings (settings-with credentials))
         session ^DefaultRepositorySystemSession (deps.util.maven/make-system-session context)
-        ;; Overwrite TransferListener not to show "Downloading" messages
-        _ (.setTransferListener session custom-transfer-listener)
-        ;; c.f. https://stackoverflow.com/questions/35488167/how-can-you-find-the-latest-version-of-a-maven-artifact-from-java-using-aether
-        artifact (deps.util.maven/coord->artifact lib {:mvn/version version})
-        remote-repos (deps.util.maven/remote-repos system session (:repositories opts))]
-    {:system system
-     :session session
-     :artifact artifact
-     :remote-repos remote-repos}))
+        store ^ConcurrentHashMap deps.util.session/session]
+    ;; Overwrite TransferListener not to show "Downloading" messages
+    (.setTransferListener session custom-transfer-listener)
+    (.put store :mvn/context context)
+    (.put store :mvn/system (deps.util.maven/make-system context))
+    (.put store :mvn/session session)))
 
-(defn get-versions
-  [name opts]
-  (let [{:keys [^RepositorySystem system
-                ^DefaultRepositorySystemSession  session
-                ^Artifact artifact
-                remote-repos]} (repository-system name "[0,)" opts)
-        req (doto (VersionRangeRequest.)
-              (.setArtifact artifact)
-              (.setRepositories remote-repos))]
-    (->> (.resolveVersionRange system session req)
-         (.getVersions))))
-
-(defn authenticator
-  ^Authenticator
-  [^String username ^String password]
-  (proxy [Authenticator] []
-    (getPasswordAuthentication []
-      (PasswordAuthentication. username (char-array password)))))
-
-(defn initialize-proxy-setting!
+(defn active-proxy
+  "Returns the active proxy of the user's Maven settings as a map, or nil if
+  none is active."
   []
-  (when-let [prxy (some-> (get-maven-settings {})
-                          (.getActiveProxy))]
-    (let [host (.getHost prxy)
-          port (.getPort prxy)
-          username (.getUsername prxy)
-          password (.getPassword prxy)]
-      (System/setProperty "http.proxyHost" host)
-      (System/setProperty "http.proxyPort" (str port))
-      (System/setProperty "https.proxyHost" host)
-      (System/setProperty "https.proxyPort" (str port))
-      (when (and username password)
-        (System/setProperty "jdk.http.auth.tunneling.disabledSchemes" "")
-        (System/setProperty "jdk.http.auth.proxying.disabledSchemes" "")
-        (Authenticator/setDefault (authenticator username password))))))
+  (when-let [prxy (.getActiveProxy (settings-with nil))]
+    {:host (.getHost prxy)
+     :port (.getPort prxy)
+     :username (.getUsername prxy)
+     :password (.getPassword prxy)}))
