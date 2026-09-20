@@ -47,7 +47,9 @@
   "Seeds the session with the credentials of repositories, replacing those of
   another project.
   A caller that runs in parallel with another credential set reseeds between
-  this and the lookup, so callers group by `credential-set` first."
+  this and the lookup, so callers group by `credential-set` first. A lookup
+  that outlives its timeout has the same race. Either loses its credentials
+  and reports a 401, neither sends them elsewhere."
   [repositories]
   (let [wanted [(credential-set repositories) *local-repo*]]
     (when (not= wanted @seeded)

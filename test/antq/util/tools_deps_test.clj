@@ -35,6 +35,20 @@
 (def ^:private other-metadata
   "<metadata><groupId>acme</groupId><artifactId>lib</artifactId><versioning><versions><version>1.0.0</version><version>2.0.0</version></versions></versioning></metadata>")
 
+(def ^:private child-pom
+  (str "<project><modelVersion>4.0.0</modelVersion>"
+       "<parent><groupId>acme</groupId><artifactId>parent</artifactId><version>1</version></parent>"
+       "<groupId>acme</groupId><artifactId>child</artifactId><version>1.0</version>"
+       "<repositories><repository><id>acme</id><url>URL</url></repository></repositories></project>"))
+
+(def ^:private requests
+  "Every request the repository saw, as [path authorization-header]."
+  (atom []))
+
+(def ^:private base-url
+  "The URL of the running repository, for the POM that declares another one."
+  (atom nil))
+
 (def ^:private authorization
   (str "Basic " (.encodeToString (Base64/getEncoder) (.getBytes "nexus-user:nexus-pass"))))
 
@@ -42,7 +56,11 @@
   "Returns [status body] for a request path and its Authorization header.
   Paths under /open need no credentials."
   [path header]
+  (swap! requests conj [path header])
   (cond
+    (str/ends-with? path "/acme/child/1.0/child-1.0.pom")
+    [200 (str/replace child-pom "URL" (str @base-url "elsewhere/"))]
+
     (str/starts-with? path "/slow/a/") (do (Thread/sleep 1000) [200 metadata])
     (str/starts-with? path "/open/b/") [200 other-metadata]
     (str/starts-with? path "/open/a/") [200 metadata]
@@ -91,6 +109,8 @@
   (let [[port stop!] (start-server!)
         url (str "http://localhost:" port "/")
         local (str (Files/createTempDirectory "antq-m2" (into-array FileAttribute [])))]
+    (reset! requests [])
+    (reset! base-url url)
     (try
       (binding [sut/*local-repo* local]
         (f url))
@@ -119,6 +139,20 @@
                   b (in-parallel "b" "open/b/")]
               (t/is (= ["1.0.0"] @a))
               (t/is (= ["1.0.0" "2.0.0"] @b)))))))))
+
+(t/deftest declared-repository-test
+  (when (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
+    (with-repository
+      (fn [url]
+        (t/testing "a repository a POM declares does not receive the credentials"
+          (try
+            (sut/coord-deps 'acme/child "1.0"
+                            {"acme" {:url url :username "nexus-user" :password "nexus-pass"}})
+            ;; the parent is not there, which is what sends the lookup to the
+            ;; repository the POM declares
+            (catch Exception _))
+          (let [elsewhere (filter #(str/starts-with? (first %) "/elsewhere/") @requests)]
+            (t/is (not-any? second elsewhere))))))))
 
 (t/deftest credentials-test
   ;; tools.deps refuses an http: repository without this
