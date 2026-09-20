@@ -44,7 +44,9 @@
 
 (defn- ensure-credentials!
   "Seeds the session with the credentials of repositories, replacing those of
-  another project."
+  another project.
+  A caller that runs in parallel with another credential set reseeds between
+  this and the lookup, so callers group by `credential-set` first."
   [repositories]
   (let [wanted [(credential-set repositories) *local-repo*]]
     (when (not= wanted @seeded)
