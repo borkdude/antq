@@ -31,10 +31,11 @@
   [credentials]
   (if-bb
    (let [read-settings (requiring-resolve 'babashka.impl.mvn.settings/read-settings)
-         servers (update-vals credentials #(select-keys % [:username :password]))
          store ^ConcurrentHashMap session/session]
-     ;; settings.xml wins where both name a server
-     (.put store :babashka.impl.mvn/settings (update (read-settings) :servers #(merge servers %)))
+     ;; the credentials carry the URL they were given for, so a repository a
+     ;; POM declares under the same id does not receive them
+     (.put store :babashka.impl.mvn/settings
+           (assoc (read-settings) :caller-servers credentials))
      ;; cached repositories and version listings carry the previous credentials
      (doseq [k (vec (.keySet store))
              :when (and (vector? k)
