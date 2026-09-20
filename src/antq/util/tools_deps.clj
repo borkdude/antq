@@ -61,11 +61,24 @@
   (cond-> {:mvn/repos (update-vals repositories #(select-keys % [:url :releases :snapshots]))}
     *local-repo* (assoc :mvn/local-repo *local-repo*)))
 
+(defn- forget-versions!
+  "Drops the cached version listings. babashka keys them without the
+  repositories, so another repository would be given this listing."
+  []
+  (if-bb
+   (let [store ^ConcurrentHashMap session/session]
+     (doseq [k (vec (.keySet store))
+             :when (and (vector? k) (= :babashka.impl.mvn/versions (first k)))]
+       (.remove store k)))
+   nil))
+
 (defn find-versions
   "Returns the release versions of lib in repositories, oldest first."
   [lib repositories]
   (ensure-credentials! repositories)
-  (map :mvn/version (ext/find-versions (symbol lib) nil :mvn (config repositories))))
+  (let [lib (symbol lib)]
+    (forget-versions!)
+    (map :mvn/version (ext/find-versions lib nil :mvn (config repositories)))))
 
 (defn coord-deps
   "Returns the dependencies of lib at version. Fetches its POM into the local

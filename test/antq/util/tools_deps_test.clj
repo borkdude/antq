@@ -27,18 +27,24 @@
       (t/is (not-any? u.mvn/snapshot? vers)))))
 
 (def ^:private metadata
-  "<metadata><groupId>acme</groupId><artifactId>lib</artifactId><versioning><versions><version>1.0.0</version><version>2.0.0</version></versions></versioning></metadata>")
+  "<metadata><groupId>acme</groupId><artifactId>lib</artifactId><versioning><versions><version>1.0.0</version></versions></versioning></metadata>")
 
 (def ^:private pom
   "<project><modelVersion>4.0.0</modelVersion><groupId>acme</groupId><artifactId>lib</artifactId><version>1.0.0</version><dependencies><dependency><groupId>acme</groupId><artifactId>dep</artifactId><version>3.0.0</version></dependency></dependencies></project>")
+
+(def ^:private other-metadata
+  "<metadata><groupId>acme</groupId><artifactId>lib</artifactId><versioning><versions><version>1.0.0</version><version>2.0.0</version></versions></versioning></metadata>")
 
 (def ^:private authorization
   (str "Basic " (.encodeToString (Base64/getEncoder) (.getBytes "nexus-user:nexus-pass"))))
 
 (defn- respond
-  "Returns [status body] for a request path and its Authorization header."
+  "Returns [status body] for a request path and its Authorization header.
+  Paths under /open need no credentials."
   [path header]
   (cond
+    (str/starts-with? path "/open/b/") [200 other-metadata]
+    (str/starts-with? path "/open/a/") [200 metadata]
     (not= header authorization) [401 ""]
     (str/ends-with? path "/maven-metadata.xml") [200 metadata]
     (str/ends-with? path "/acme/lib/1.0.0/lib-1.0.0.pom") [200 pom]
@@ -91,6 +97,18 @@
         (stop!)
         (delete-tree! local)))))
 
+(t/deftest two-repositories-test
+  (when (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
+    (with-repository
+      (fn [url]
+        ;; the credentials are the same, so the session is not reseeded between
+        ;; the two lookups
+        (t/testing "each repository has its own versions of one lib"
+          (t/is (= ["1.0.0"]
+                   (sut/find-versions 'acme/lib {"a" {:url (str url "open/a/")}})))
+          (t/is (= ["1.0.0" "2.0.0"]
+                   (sut/find-versions 'acme/lib {"b" {:url (str url "open/b/")}}))))))))
+
 (t/deftest credentials-test
   ;; tools.deps refuses an http: repository without this
   (t/is (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
@@ -101,7 +119,7 @@
         (let [repos (fn [credentials] {"acme" (merge {:url url} credentials)})
               credentials {:username "nexus-user" :password "nexus-pass"}]
           (t/testing "credentials from the project file list versions"
-            (t/is (= ["1.0.0" "2.0.0"]
+            (t/is (= ["1.0.0"]
                      (sut/find-versions 'acme/lib (repos credentials)))))
 
           (t/testing "the credentials of the previous lookup are gone"
