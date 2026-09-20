@@ -89,9 +89,10 @@
     (if-bb
      ;; the drop and the lookup are one step, the cache entry is filled while
      ;; it is held
-     (locking (lib-lock lib)
-       (forget-versions! lib)
-       (doall (versions)))
+     (let [lock (lib-lock lib)]
+       (locking lock
+         (forget-versions! lib)
+         (doall (versions))))
      (versions))))
 
 (defn coord-deps
