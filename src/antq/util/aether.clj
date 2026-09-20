@@ -56,8 +56,6 @@
         store ^ConcurrentHashMap deps.util.session/session]
     ;; Overwrite TransferListener not to show "Downloading" messages
     (.setTransferListener session custom-transfer-listener)
-    ;; A repository a POM declares is never asked for these credentials
-    (.setIgnoreArtifactDescriptorRepositories session true)
     (.put store :mvn/context context)
     (.put store :mvn/system (deps.util.maven/make-system context))
     (.put store :mvn/session session)))

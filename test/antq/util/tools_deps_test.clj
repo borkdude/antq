@@ -144,6 +144,8 @@
   (when (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
     (with-repository
       (fn [url]
+        ;; the declared repository reuses the id of the one that has the
+        ;; credentials, which is the way they could reach another host
         (t/testing "a repository a POM declares does not receive the credentials"
           (try
             (sut/coord-deps 'acme/child "1.0"
