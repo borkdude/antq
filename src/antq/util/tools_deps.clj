@@ -28,6 +28,12 @@
        (.remove store k)))
    ((requiring-resolve 'antq.util.aether/seed-session!) credentials)))
 
+(defn- unseeded?
+  [credentials]
+  (let [known @seeded]
+    (or (nil? known)
+        (some (fn [[id _]] (not (contains? known id))) credentials))))
+
 (defn- ensure-credentials!
   "Seeds the session with the credentials of repositories, once per set.
   The session is one per process, so credentials add up over a run. Throws
@@ -39,10 +45,13 @@
             :when (and known url (not= known url))]
       (throw (ex-info (str "Repository " id " has credentials and two URLs: " known " and " url)
                       {:repository id})))
-    (when (or (nil? @seeded)
-              (some (fn [[id c]] (not= c (get @seeded id))) credentials))
+    (when (unseeded? credentials)
       (locking seeded
-        (seed! (swap! seeded #(merge credentials %)))))))
+        ;; seeded changes after the session does, so a waiting thread sees both
+        (when (unseeded? credentials)
+          (let [merged (merge credentials @seeded)]
+            (seed! merged)
+            (reset! seeded merged)))))))
 
 (defn- config
   [repositories]
