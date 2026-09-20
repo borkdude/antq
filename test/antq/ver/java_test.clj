@@ -39,11 +39,11 @@
         (t/is (= #{["foo" {:url "s3://bar"}]}
                  diff))))))
 
-(t/deftest get-sorted-versions-letter-test
-  (t/testing "a version that starts with a letter sorts below the numbered ones"
-    (with-redefs [sut/get-versions-with-timeout (fn [_ _] ["r03" "1" "2"])]
-      (t/is (= ["2" "1" "r03"]
-               (get-sorted-versions {:name "letters" :version "1.0.0"}))))))
+(t/deftest get-sorted-versions-order-test
+  (t/testing "a qualified zero version and a version that starts with a letter are listed"
+    (with-redefs [sut/get-versions-with-timeout (fn [_ _] ["r03" "0.0.0-beta" "1" "2"])]
+      (t/is (= ["2" "1" "0.0.0-beta" "r03"]
+               (get-sorted-versions {:name "order" :version "1.0.0"}))))))
 
 (t/deftest get-sorted-versions-timeout-test
   (with-redefs [sut/get-sorted-versions-by-name sut/get-sorted-versions-by-name*

@@ -341,6 +341,8 @@
     (cond->> (outdated-deps deps options)
       (and (not (:no-diff options))
            (not (:no-changes options)))
+      ;; sequential: the Maven session holds one project's credentials, see
+      ;; antq.util.tools-deps
       (map assoc-changes-url)
 
       :always

@@ -224,7 +224,7 @@
                (map :name (#'sut/assoc-versions-in-parallel deps {:no-progress true})))))))
 
 (t/deftest outdated-deps-credential-sets-test
-  (t/testing "one lib in two credential sets takes the versions of the first"
+  (t/testing "one lib in two credential sets takes the versions of the first lookup"
     (let [private (r/map->Dependency
                    {:type :test-credentials :name "alice" :version "0.1.0"
                     :repositories {"nexus" {:url "https://nexus.example.com"
