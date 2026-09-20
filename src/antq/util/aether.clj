@@ -2,7 +2,6 @@
   "Code that uses Aether or Maven's settings classes. Keep it in this namespace."
   (:require
    [antq.log :as log]
-   [antq.util.maven :as u.mvn]
    [clojure.tools.deps.util.maven :as deps.util.maven]
    [clojure.tools.deps.util.session :as deps.util.session])
   (:import
@@ -31,14 +30,6 @@
                              (.setPassword password))))
     settings))
 
-(defn get-maven-settings
-  ^Settings
-  [opts]
-  ;; NOTE
-  ;; In Leiningen, authentication information is defined in project.clj or profiles.clj instead of ~/.m2/settings.xml,
-  ;; so if there is authentication information in `:repositories`, apply to `settings`
-  (settings-with (u.mvn/credentials (:repositories opts))))
-
 (def ^TransferListener custom-transfer-listener
   "Copy from clojure.tools.deps.util.maven/console-listener
   But no outputs for `transferStarted`"
@@ -55,13 +46,18 @@
 
 (defn seed-session!
   "Puts a Maven context with credentials as servers into the tools.deps
-  session, where the :mvn extension looks it up."
-  [credentials]
-  (let [context ^Context (deps.util.maven/make-context :settings (settings-with credentials))
+  session, where the :mvn extension looks it up. local-repo is the local
+  Maven repository, or nil for the default one."
+  [credentials local-repo]
+  (let [local-repo (or local-repo @deps.util.maven/cached-local-repo)
+        context ^Context (deps.util.maven/make-context :settings (settings-with credentials)
+                                                       :local-repo local-repo)
         session ^DefaultRepositorySystemSession (deps.util.maven/make-system-session context)
         store ^ConcurrentHashMap deps.util.session/session]
     ;; Overwrite TransferListener not to show "Downloading" messages
     (.setTransferListener session custom-transfer-listener)
+    ;; A repository a POM declares is never asked for these credentials
+    (.setIgnoreArtifactDescriptorRepositories session true)
     (.put store :mvn/context context)
     (.put store :mvn/system (deps.util.maven/make-system context))
     (.put store :mvn/session session)))

@@ -40,9 +40,11 @@
    [antq.upgrade.leiningen]
    [antq.upgrade.pom]
    [antq.upgrade.shadow]
+   [antq.util.dep :as u.dep]
    [antq.util.exception :as u.ex]
    [antq.util.file :as u.file]
    [antq.util.maven :as u.maven]
+   [antq.util.tools-deps :as u.tools-deps]
    [antq.util.ver :as u.ver]
    [antq.ver :as ver]
    [antq.ver.circle-ci-orb]
@@ -214,6 +216,20 @@
     (assoc dep :_versions (:_versions dep-with-vers))
     dep))
 
+(defn- assoc-versions-in-parallel
+  "Returns deps with their versions, in the order they came in.
+  Deps are looked up one credential set at a time, since the Maven session
+  holds the credentials of one project. See antq.util.tools-deps."
+  [deps options]
+  (->> (map-indexed vector deps)
+       (group-by (fn [[_ dep]]
+                   (u.tools-deps/credential-set (:repositories (u.dep/repository-opts dep)))))
+       (vals)
+       (mapcat (fn [group]
+                 (doall (pmap (fn [[i dep]] [i (assoc-versions dep options)]) group))))
+       (sort-by first)
+       (mapv second)))
+
 (defn outdated-deps
   [deps options]
   (let [forced-artifacts (forced-artifact-version-map options)
@@ -228,7 +244,7 @@
                    (mapv #(mark-forced-version % forced-artifacts)))
         uniq-deps (distinct-deps org-deps)
         _ (report/init-progress uniq-deps options)
-        uniq-deps-with-vers (doall (pmap #(assoc-versions % options) uniq-deps))
+        uniq-deps-with-vers (assoc-versions-in-parallel uniq-deps options)
         _ (report/deinit-progress uniq-deps options)
         assoc-latest-version* #(assoc-latest-version % options)
         version-checked-deps (->> org-deps

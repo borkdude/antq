@@ -18,7 +18,9 @@
 
 (defn- get-sorted-versions
   [m]
-  (ver/get-sorted-versions (r/map->Dependency (assoc m :type :java :name "dummy"))
+  ;; get-sorted-versions-by-name is memoized, so a test that wants its own
+  ;; versions passes its own :name
+  (ver/get-sorted-versions (r/map->Dependency (merge {:type :java :name "dummy"} m))
                            {}))
 
 (t/deftest get-sorted-versions-test
@@ -36,6 +38,12 @@
                                  (set u.mvn/default-repos))]
         (t/is (= #{["foo" {:url "s3://bar"}]}
                  diff))))))
+
+(t/deftest get-sorted-versions-letter-test
+  (t/testing "a version that starts with a letter sorts below the numbered ones"
+    (with-redefs [sut/get-versions-with-timeout (fn [_ _] ["r03" "1" "2"])]
+      (t/is (= ["2" "1" "r03"]
+               (get-sorted-versions {:name "letters" :version "1.0.0"}))))))
 
 (t/deftest get-sorted-versions-timeout-test
   (with-redefs [sut/get-sorted-versions-by-name sut/get-sorted-versions-by-name*

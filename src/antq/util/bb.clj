@@ -5,6 +5,6 @@
 
 (defmacro if-bb
   "Expands to then on babashka and to else on the JVM.
-  Only that branch is compiled."
+  Only that branch is compiled, on the host that compiles the macro call."
   [then else]
   (if bb-version then else))

@@ -76,11 +76,14 @@
         artifact-id (first (str/split (name lib) #"\$"))
         file (io/file base path (str artifact-id "-" version ".pom"))]
     (when-not (.exists file)
-      (try
-        (u.tools-deps/coord-deps lib version repositories)
-        (catch Exception ex
-          (log/warning (str "Failed to read the POM of " lib " " version ": "
-                            (->> ex (iterate ex-cause) (take-while some?) last ex-message))))))
+      (let [reason (try
+                     (u.tools-deps/coord-deps lib version repositories)
+                     nil
+                     (catch Exception ex
+                       (->> ex (iterate ex-cause) (take-while some?) last ex-message)))]
+        ;; the dependencies can fail over a parent POM while the POM itself arrived
+        (when (and reason (not (.exists file)))
+          (log/warning (str "Failed to read the POM of " lib " " version ": " reason)))))
     (when (.exists file)
       file)))
 

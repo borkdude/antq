@@ -6,6 +6,7 @@
    [antq.util.dep :as u.dep]
    [antq.util.exception :as u.ex]
    [antq.util.git :as u.git]
+   [antq.util.maven :as u.mvn]
    [antq.ver :as ver]
    [clojure.string :as str]
    [clojure.test :as t]
@@ -203,6 +204,36 @@
     (t/testing "focus containing specific version, should force it (0.5.0) even when newer exists (3.0.0)"
       (t/is (= [(test-dep {:name "alice" :version "1.0.0" :latest-version "0.5.0" :forced-version "0.5.0"})]
                (sut/outdated-deps deps {:focus ["alice@0.5.0"]}))))))
+
+(defmethod ver/get-sorted-versions :test-credentials
+  [dep _]
+  (if (seq (u.mvn/credentials (:repositories dep)))
+    ["9.0.0"]
+    ["1.0.0"]))
+
+(t/deftest assoc-versions-in-parallel-test
+  (t/testing "deps come back in the order they came in"
+    (let [dep (fn [name credentials]
+                (r/map->Dependency
+                 (cond-> {:type :test-credentials :name name :version "0.1.0"}
+                   credentials (assoc :repositories {"nexus" {:url "https://nexus.example.com"
+                                                              :username "u" :password "p"}}))))
+          ;; the credential sets alternate, so grouping them reorders the list
+          deps [(dep "alice" true) (dep "bob" false) (dep "carol" true) (dep "dave" false)]]
+      (t/is (= ["alice" "bob" "carol" "dave"]
+               (map :name (#'sut/assoc-versions-in-parallel deps {:no-progress true})))))))
+
+(t/deftest outdated-deps-credential-sets-test
+  (t/testing "one lib in two credential sets takes the versions of the first"
+    (let [private (r/map->Dependency
+                   {:type :test-credentials :name "alice" :version "0.1.0"
+                    :repositories {"nexus" {:url "https://nexus.example.com"
+                                            :username "u" :password "p"}}})
+          public (r/map->Dependency {:type :test-credentials :name "alice" :version "0.1.0"})]
+      (t/is (= ["9.0.0" "9.0.0"]
+               (map :latest-version (sut/outdated-deps [private public] {}))))
+      (t/is (= ["1.0.0" "1.0.0"]
+               (map :latest-version (sut/outdated-deps [public private] {})))))))
 
 (t/deftest assoc-changes-url-test
   (let [dummy-dep {:type :java :name "foo/bar" :version "1" :latest-version "2"}]

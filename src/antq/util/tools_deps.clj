@@ -1,7 +1,11 @@
 (ns ^:no-doc antq.util.tools-deps
   "tools.deps calls that honor credentials from a project file. tools.deps
   keeps its Maven context in a session. The credentials go into that session,
-  so they do not travel in a config map."
+  so they do not travel in a config map.
+
+  The session holds the credentials of one project at a time. Callers that
+  look up in parallel group their work by `credential-set` first, see
+  `antq.core/outdated-deps`."
   (:require
    [antq.util.bb :refer [if-bb]]
    [antq.util.maven :as u.mvn]
@@ -12,50 +16,48 @@
   (:import
    java.util.concurrent.ConcurrentHashMap))
 
-(defonce ^:private seeded (atom nil))
+(def ^:dynamic *local-repo*
+  "The local Maven repository, or nil for the default one."
+  nil)
+
+(defonce ^:private seeded (atom ::none))
+
+(defn credential-set
+  "Returns the credentials of repositories, the unit the session holds."
+  [repositories]
+  (u.mvn/credentials repositories))
 
 (defn- seed!
   [credentials]
   (if-bb
    (let [read-settings (requiring-resolve 'babashka.impl.mvn.settings/read-settings)
-         servers (into {} (map (fn [[id c]] [id (select-keys c [:username :password])])) credentials)
+         servers (update-vals credentials #(select-keys % [:username :password]))
          store ^ConcurrentHashMap session/session]
      ;; settings.xml wins where both name a server
      (.put store :babashka.impl.mvn/settings (update (read-settings) :servers #(merge servers %)))
-     ;; repositories resolved before this carry the old credentials
+     ;; cached repositories and version listings carry the previous credentials
      (doseq [k (vec (.keySet store))
-             :when (and (vector? k) (= :babashka.impl.mvn/repos (first k)))]
+             :when (and (vector? k)
+                        (#{:babashka.impl.mvn/repos :babashka.impl.mvn/versions} (first k)))]
        (.remove store k)))
-   ((requiring-resolve 'antq.util.aether/seed-session!) credentials)))
-
-(defn- unseeded?
-  [credentials]
-  (let [known @seeded]
-    (or (nil? known)
-        (some (fn [[id _]] (not (contains? known id))) credentials))))
+   ((requiring-resolve 'antq.util.aether/seed-session!) credentials *local-repo*)))
 
 (defn- ensure-credentials!
-  "Seeds the session with the credentials of repositories, once per set.
-  The session is one per process, so credentials add up over a run. Throws
-  if one repository id has credentials and two URLs."
+  "Seeds the session with the credentials of repositories, replacing those of
+  another project."
   [repositories]
-  (let [credentials (u.mvn/credentials repositories)]
-    (doseq [[id {:keys [url]}] repositories
-            :let [known (get-in @seeded [id :url])]
-            :when (and known url (not= known url))]
-      (throw (ex-info (str "Repository " id " has credentials and two URLs: " known " and " url)
-                      {:repository id})))
-    (when (unseeded? credentials)
+  (let [wanted [(credential-set repositories) *local-repo*]]
+    (when (not= wanted @seeded)
       (locking seeded
-        ;; seeded changes after the session does, so a waiting thread sees both
-        (when (unseeded? credentials)
-          (let [merged (merge credentials @seeded)]
-            (seed! merged)
-            (reset! seeded merged)))))))
+        ;; seeded is set after the session is, so a waiting thread sees both
+        (when (not= wanted @seeded)
+          (seed! (first wanted))
+          (reset! seeded wanted))))))
 
 (defn- config
   [repositories]
-  {:mvn/repos (update-vals repositories #(select-keys % [:url :releases :snapshots]))})
+  (cond-> {:mvn/repos (update-vals repositories #(select-keys % [:url :releases :snapshots]))}
+    *local-repo* (assoc :mvn/local-repo *local-repo*)))
 
 (defn find-versions
   "Returns the release versions of lib in repositories, oldest first."

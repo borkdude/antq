@@ -5,12 +5,16 @@
    [antq.util.maven :as u.mvn]
    [antq.util.tools-deps :as sut]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :as t])
   (:import
+   (java.nio.file
+    Files)
+   (java.nio.file.attribute
+    FileAttribute)
    (java.util
-    Base64
-    UUID)))
+    Base64)))
 
 (def ^:private current-clojure-version
   (get-in (edn/read-string (slurp "deps.edn"))
@@ -25,18 +29,20 @@
 (def ^:private metadata
   "<metadata><groupId>acme</groupId><artifactId>lib</artifactId><versioning><versions><version>1.0.0</version><version>2.0.0</version></versions></versioning></metadata>")
 
+(def ^:private pom
+  "<project><modelVersion>4.0.0</modelVersion><groupId>acme</groupId><artifactId>lib</artifactId><version>1.0.0</version><dependencies><dependency><groupId>acme</groupId><artifactId>dep</artifactId><version>3.0.0</version></dependency></dependencies></project>")
+
+(def ^:private authorization
+  (str "Basic " (.encodeToString (Base64/getEncoder) (.getBytes "nexus-user:nexus-pass"))))
+
 (defn- respond
   "Returns [status body] for a request path and its Authorization header."
-  [path authorization]
+  [path header]
   (cond
-    (not= authorization (str "Basic " (.encodeToString (Base64/getEncoder) (.getBytes "nexus-user:nexus-pass"))))
-    [401 ""]
-
-    (str/ends-with? path "/maven-metadata.xml")
-    [200 metadata]
-
-    :else
-    [404 ""]))
+    (not= header authorization) [401 ""]
+    (str/ends-with? path "/maven-metadata.xml") [200 metadata]
+    (str/ends-with? path "/acme/lib/1.0.0/lib-1.0.0.pom") [200 pom]
+    :else [404 ""]))
 
 (def ^:private challenge
   {"WWW-Authenticate" "Basic realm=\"test\""})
@@ -67,21 +73,40 @@
      (.start server)
      [(.getPort (.getAddress server)) #(.stop server 0)])))
 
-(t/deftest find-versions-with-credentials-test
-  ;; tools.deps refuses an http: repository unless this is set
-  (if-not (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
-    (println "Skipping find-versions-with-credentials-test: set CLOJURE_CLI_ALLOW_HTTP_REPO")
-    (let [[port stop!] (start-server!)
-          url (str "http://localhost:" port "/")]
-      (try
-        (t/testing "a repository with credentials from the project file lists versions"
-          (t/is (= ["1.0.0" "2.0.0"]
-                   (sut/find-versions 'acme/lib
-                                      {(str "with-credentials-" (UUID/randomUUID))
-                                       {:url url :username "nexus-user" :password "nexus-pass"}}))))
-        (t/testing "the same repository without credentials lists none"
-          (t/is (empty? (sut/find-versions 'acme/other
-                                           {(str "without-credentials-" (UUID/randomUUID))
-                                            {:url url}}))))
-        (finally
-          (stop!))))))
+(defn- delete-tree! [dir]
+  (doseq [f (reverse (file-seq (io/file dir)))]
+    (io/delete-file f true)))
+
+(defn- with-repository
+  "Calls f with the URL of an authenticating repository and a local Maven
+  repository of its own."
+  [f]
+  (let [[port stop!] (start-server!)
+        url (str "http://localhost:" port "/")
+        local (str (Files/createTempDirectory "antq-m2" (into-array FileAttribute [])))]
+    (try
+      (binding [sut/*local-repo* local]
+        (f url))
+      (finally
+        (stop!)
+        (delete-tree! local)))))
+
+(t/deftest credentials-test
+  ;; tools.deps refuses an http: repository without this
+  (t/is (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
+        "set CLOJURE_CLI_ALLOW_HTTP_REPO to run this test")
+  (when (u.env/getenv "CLOJURE_CLI_ALLOW_HTTP_REPO")
+    (with-repository
+      (fn [url]
+        (let [repos (fn [credentials] {"acme" (merge {:url url} credentials)})
+              credentials {:username "nexus-user" :password "nexus-pass"}]
+          (t/testing "credentials from the project file list versions"
+            (t/is (= ["1.0.0" "2.0.0"]
+                     (sut/find-versions 'acme/lib (repos credentials)))))
+
+          (t/testing "the credentials of the previous lookup are gone"
+            (t/is (empty? (sut/find-versions 'acme/other (repos nil)))))
+
+          (t/testing "credentials reach the POM of a dependency"
+            (t/is (= [['acme/dep {:mvn/version "3.0.0"}]]
+                     (sut/coord-deps 'acme/lib "1.0.0" (repos credentials))))))))))
