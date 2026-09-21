@@ -7,6 +7,9 @@
   (:import
    eu.maveniverse.maven.mima.context.Context
    java.util.concurrent.ConcurrentHashMap
+   (org.apache.maven.model
+    Model
+    Repository)
    (org.apache.maven.settings
     Server
     Settings)
@@ -59,6 +62,13 @@
     (.put store :mvn/context context)
     (.put store :mvn/system (deps.util.maven/make-system context))
     (.put store :mvn/session session)))
+
+(defn model-repositories
+  "Returns the repositories of a Maven model as a map of repository id to :url."
+  [^Model model]
+  (reduce (fn [accm ^Repository repo]
+            (assoc accm (.getId repo) {:url (.getUrl repo)}))
+          {} (.getRepositories model)))
 
 (defn active-proxy
   "Returns the active proxy of the user's Maven settings as a map, or nil if

@@ -1,0 +1,5 @@
+{:paths ["script"]
+ :deps {com.github.liquidz/antq {:local/root "."}}
+ :tasks
+ {bb-test {:doc "Check that antq runs on babashka"
+           :exec-fn antq.smoke/run}}}

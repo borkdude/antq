@@ -101,15 +101,14 @@
     (getPasswordAuthentication []
       (PasswordAuthentication. username (char-array password)))))
 
+(if-bb (require '[babashka.deps.mvn :as deps.mvn]) nil)
+
 (defn- active-proxy
   "Returns the active proxy of the user's Maven settings as a map, or nil if
   none is active."
   []
   (if-bb
-   ;; babashka's get-settings returns the settings as data
-   (->> (:proxies ((requiring-resolve 'clojure.tools.deps.util.maven/get-settings)))
-        (filter :active)
-        (first))
+   (deps.mvn/active-proxy)
    ((requiring-resolve 'antq.util.aether/active-proxy))))
 
 (defn initialize-proxy-setting!
