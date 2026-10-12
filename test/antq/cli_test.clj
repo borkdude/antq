@@ -1,6 +1,7 @@
 (ns antq.cli-test
   (:require
    [antq.cli :as sut]
+   [clojure.string :as str]
    [clojure.test :as t]
    [matcher-combinators.matchers :as m]
    [matcher-combinators.test]))
@@ -236,3 +237,23 @@
                    :warnings m/absent
                    :help #"(?s).*USAGE.*:upgrade.*use a vector"}
                   (sut/validate-tool-opts {:help true})))))
+
+(defn- complete
+  [& words]
+  (with-out-str
+    (sut/completions (into ["org.babashka.cli/completions" "complete" "--shell" "zsh" "--"] words))))
+
+;; with-out-str does not capture built-in babashka.cli output on bb
+(t/deftest completions-test
+  (when-not (System/getProperty "babashka.version")
+    (t/testing "--skip completes project types"
+      (t/is (= ["babashka" "boot"]
+               (map #(first (str/split % #"\t"))
+                    (str/split-lines (complete "--skip" "b"))))))
+
+    (t/testing "--rep completes --reporter"
+      (t/is (str/starts-with? (complete "--rep") "--reporter")))
+
+    (t/testing "completion omits internal and deprecated options"
+      (t/is (= "" (complete "--usage")))
+      (t/is (= "" (complete "--no-diff"))))))
