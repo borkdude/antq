@@ -243,7 +243,7 @@
   (with-out-str
     (sut/completions (into ["org.babashka.cli/completions" "complete" "--shell" "zsh" "--"] words))))
 
-;; with-out-str does not capture built-in babashka.cli output on bb
+;; with-out-str does not capture built-in babashka.cli output on bb: https://github.com/babashka/babashka/issues/2193
 (t/deftest completions-test
   (when-not (System/getProperty "babashka.version")
     (t/testing "--skip completes project types"
